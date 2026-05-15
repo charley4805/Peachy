@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-brand-coral: #FF5A5F;
+  --color-brand-purple: #8B5CF6;
+  --color-brand-deep-purple: #5B21B6;
+  --color-surface-fog: #F7F7FA;
+  --color-surface-white: #FFFFFF;
+  --color-silver-soft: #E5E7EB;
+  --color-silver-medium: #C7CBD1;
+  --color-silver-dark: #6B7280;
+  --color-obsidian: #08080B;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background-color: var(--color-surface-fog);
+  color: var(--color-obsidian);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@utility glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+}
+
+@utility btn-primary {
+  background: linear-gradient(135deg, var(--color-brand-coral) 0%, var(--color-brand-purple) 100%);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+@utility btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px -10px var(--color-brand-purple);
 }
