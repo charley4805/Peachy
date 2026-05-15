@@ -1,73 +1,86 @@
-import Link from 'next/link';
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const nav = [
+  { href: "/dashboard", label: "Dashboard", icon: "⊞" },
+  { href: "/dashboard/employees", label: "Employees", icon: "👥" },
+  { href: "/dashboard/timesheets", label: "Timesheets", icon: "🗒️" },
+  { href: "/dashboard/schedule", label: "Schedule", icon: "📅" },
+  { href: "/dashboard/jobs", label: "Jobs", icon: "🏗️" },
+  { href: "/dashboard/reports", label: "Reports", icon: "📊" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
+];
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="min-h-screen flex bg-surface-fog overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-silver-soft hidden md:flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-silver-soft">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-coral to-brand-purple flex items-center justify-center text-white font-bold text-xl mr-3">
-            P
-          </div>
-          <span className="font-bold text-xl tracking-wide text-obsidian">PEACHY</span>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <Link href="/dashboard" className="flex items-center px-4 py-3 bg-gray-50 text-brand-purple rounded-lg font-medium text-sm transition-colors">
-            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            Dashboard
-          </Link>
-          <Link href="/dashboard/schedule" className="flex items-center px-4 py-3 text-silver-dark hover:bg-gray-50 hover:text-obsidian rounded-lg font-medium text-sm transition-colors">
-            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Schedule
-          </Link>
-          <Link href="/dashboard/timesheets" className="flex items-center px-4 py-3 text-silver-dark hover:bg-gray-50 hover:text-obsidian rounded-lg font-medium text-sm transition-colors">
-            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Timesheets
-          </Link>
-          <Link href="/dashboard/team" className="flex items-center px-4 py-3 text-silver-dark hover:bg-gray-50 hover:text-obsidian rounded-lg font-medium text-sm transition-colors">
-            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            Team
-          </Link>
-        </nav>
-      </aside>
+  const pathname = usePathname();
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-16 bg-white border-b border-silver-soft flex items-center justify-between px-8">
-          <h2 className="text-xl font-bold text-obsidian">Overview</h2>
-          <div className="flex items-center space-x-4">
-            <button className="p-2 text-silver-dark hover:bg-gray-50 rounded-full transition-colors">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <div className="w-9 h-9 rounded-full bg-gradient-to-r from-brand-coral to-brand-purple p-0.5">
-              <div className="w-full h-full rounded-full bg-white border-2 border-white overflow-hidden">
-                <img src="https://i.pravatar.cc/150?img=11" alt="Profile" className="w-full h-full object-cover" />
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-56 flex-shrink-0 bg-gray-900 flex flex-col">
+        <div className="px-5 py-5 flex items-center gap-2.5 border-b border-gray-800">
+          <Image src="/hourglass.png" alt="GlassHour" width={28} height={28} />
+          <span className="font-bold text-white text-lg">GlassHour</span>
+        </div>
+
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {nav.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active
+                    ? "bg-orange-500 text-white"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                  }`}
+              >
+                <span className="text-base">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-gray-800 space-y-0.5">
+          <Link
+            href="/partner"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          >
+            <span>🤝</span> Partner Portal
+          </Link>
+          <Link
+            href="/"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          >
+            <span>←</span> Back to Home
+          </Link>
+        </div>
+
+        <div className="px-4 py-4 border-t border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold">
+              GF
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white truncate">
+                Gustavo Fernandez
               </div>
+              <div className="text-xs text-gray-400">Admin</div>
             </div>
           </div>
-        </header>
-
-        {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-8">
-          {children}
         </div>
-      </main>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }

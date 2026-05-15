@@ -1,166 +1,178 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { useState } from "react";
 
-// Mock data
-const EMPLOYEES = [
-  { id: '1', name: 'Sarah Miller', role: 'Foreman', avatar: 'https://i.pravatar.cc/150?img=47' },
-  { id: '2', name: 'Alex Turner', role: 'Electrician', avatar: 'https://i.pravatar.cc/150?img=12' },
-  { id: '3', name: 'Mike Ross', role: 'Laborer', avatar: 'https://i.pravatar.cc/150?img=33' },
-  { id: '4', name: 'Emma Davis', role: 'Plumber', avatar: 'https://i.pravatar.cc/150?img=5' },
+const days = ["Mon 5/11", "Tue 5/12", "Wed 5/13", "Thu 5/14", "Fri 5/15", "Sat 5/16", "Sun 5/17"];
+
+type Shift = {
+  id: string;
+  employee: string;
+  day: number;
+  start: string;
+  end: string;
+  job: string;
+  color: string;
+};
+
+const initialShifts: Shift[] = [
+  { id: "1", employee: "Marcus Rivera", day: 0, start: "7:00 AM", end: "3:30 PM", job: "Riverside Complex", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { id: "2", employee: "Marcus Rivera", day: 1, start: "7:00 AM", end: "3:30 PM", job: "Riverside Complex", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { id: "3", employee: "Marcus Rivera", day: 2, start: "7:00 AM", end: "3:30 PM", job: "Riverside Complex", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { id: "4", employee: "Marcus Rivera", day: 3, start: "7:00 AM", end: "3:30 PM", job: "Riverside Complex", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { id: "5", employee: "Marcus Rivera", day: 4, start: "7:00 AM", end: "3:30 PM", job: "Riverside Complex", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { id: "6", employee: "Deja Williams", day: 0, start: "7:00 AM", end: "3:30 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "7", employee: "Deja Williams", day: 1, start: "7:00 AM", end: "3:30 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "8", employee: "Deja Williams", day: 2, start: "7:00 AM", end: "3:30 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "9", employee: "Deja Williams", day: 3, start: "7:00 AM", end: "3:30 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "10", employee: "Tom Kowalski", day: 0, start: "6:30 AM", end: "3:00 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "11", employee: "Tom Kowalski", day: 1, start: "6:30 AM", end: "3:00 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "12", employee: "Tom Kowalski", day: 2, start: "6:30 AM", end: "3:00 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "13", employee: "Tom Kowalski", day: 3, start: "6:30 AM", end: "3:00 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "14", employee: "Tom Kowalski", day: 4, start: "6:30 AM", end: "3:00 PM", job: "Harbor View", color: "bg-green-100 text-green-800 border-green-200" },
+  { id: "15", employee: "Anita Patel", day: 0, start: "8:00 AM", end: "5:00 PM", job: "Office", color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { id: "16", employee: "Anita Patel", day: 1, start: "8:00 AM", end: "5:00 PM", job: "Office", color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { id: "17", employee: "Anita Patel", day: 2, start: "8:00 AM", end: "5:00 PM", job: "Office", color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { id: "18", employee: "Anita Patel", day: 3, start: "8:00 AM", end: "5:00 PM", job: "Office", color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { id: "19", employee: "Anita Patel", day: 4, start: "8:00 AM", end: "5:00 PM", job: "Office", color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { id: "20", employee: "Jordan Lee", day: 0, start: "9:00 AM", end: "5:00 PM", job: "Metro Clinic Reno", color: "bg-orange-100 text-orange-800 border-orange-200" },
+  { id: "21", employee: "Jordan Lee", day: 2, start: "9:00 AM", end: "5:00 PM", job: "Metro Clinic Reno", color: "bg-orange-100 text-orange-800 border-orange-200" },
+  { id: "22", employee: "Jordan Lee", day: 4, start: "9:00 AM", end: "5:00 PM", job: "Metro Clinic Reno", color: "bg-orange-100 text-orange-800 border-orange-200" },
 ];
 
-const SHIFTS = [
-  { id: 's1', employeeId: '1', site: 'Downtown Highrise', date: '2026-05-10', startHour: 7, duration: 8, color: 'bg-brand-coral' },
-  { id: 's2', employeeId: '2', site: 'Downtown Highrise', date: '2026-05-10', startHour: 8, duration: 6, color: 'bg-brand-purple' },
-  { id: 's3', employeeId: '3', site: 'Uptown Clinic', date: '2026-05-10', startHour: 9, duration: 8, color: 'bg-blue-500' },
-  { id: 's4', employeeId: '4', site: 'Uptown Clinic', date: '2026-05-10', startHour: 7, duration: 4, color: 'bg-green-500' },
-  { id: 's5', employeeId: '4', site: 'City Mall Maintenance', date: '2026-05-10', startHour: 13, duration: 4, color: 'bg-orange-500' },
-];
+const employees = ["Marcus Rivera", "Deja Williams", "Tom Kowalski", "Anita Patel", "Carlos Mendoza", "Jordan Lee"];
 
 export default function SchedulePage() {
-  const [currentDate, setCurrentDate] = useState(new Date('2026-05-10'));
+  const [shifts, setShifts] = useState<Shift[]>(initialShifts);
+  const [published, setPublished] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
 
-  // Generate 24 hours (for simplicity, we'll show 6 AM to 6 PM)
-  const hours = Array.from({ length: 13 }, (_, i) => i + 6);
+  function getShifts(employee: string, day: number) {
+    return shifts.filter((s) => s.employee === employee && s.day === day);
+  }
+
+  function removeShift(id: string) {
+    setShifts((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function handleDrop(employee: string, day: number) {
+    if (!dragId) return;
+    setShifts((prev) =>
+      prev.map((s) => (s.id === dragId ? { ...s, employee, day } : s))
+    );
+    setDragId(null);
+  }
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between">
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-obsidian">Schedule Builder</h2>
-          <p className="text-silver-dark text-sm mt-1">Manage shifts and labor allocation</p>
+          <h1 className="text-2xl font-bold text-gray-900">Schedule</h1>
+          <p className="text-sm text-gray-500 mt-1">Week of May 11–17, 2026</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm">
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Prev Day
-          </Button>
-          <span className="font-medium text-obsidian px-2">May 10, 2026</span>
-          <Button variant="secondary" size="sm">
-            Next Day
-            <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Button>
-          <Button variant="primary">
-            <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Shift
-          </Button>
+        <div className="flex gap-3">
+          <button className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Copy Last Week
+          </button>
+          <button className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            + Add Shift
+          </button>
+          <button
+            onClick={() => setPublished(true)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${published
+                ? "bg-green-500 text-white"
+                : "bg-orange-500 text-white hover:bg-orange-600"
+              }`}
+          >
+            {published ? "Published ✓" : "Publish to Employees"}
+          </button>
         </div>
       </div>
 
-      {/* Gantt Chart Area */}
-      <Card noPadding className="flex-1 flex flex-col min-h-[500px]">
-        {/* Timeline Header */}
-        <div className="flex border-b border-silver-soft bg-gray-50/80 sticky top-0 z-10">
-          <div className="w-64 flex-shrink-0 p-4 border-r border-silver-soft font-bold text-obsidian text-sm flex items-center">
-            Team Member
-          </div>
-          <div className="flex-1 flex relative">
-            {hours.map((hour) => (
-              <div 
-                key={hour} 
-                className="flex-1 border-r border-silver-soft/50 p-2 text-center text-xs font-medium text-silver-dark"
-              >
-                {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
-              </div>
-            ))}
-          </div>
+      {published && (
+        <div className="mb-5 rounded-xl bg-green-50 border border-green-200 px-5 py-3 text-sm text-green-700">
+          Schedule published. All employees have been notified via push notification.
         </div>
+      )}
 
-        {/* Gantt Rows */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden pb-10">
-          {EMPLOYEES.map((employee) => (
-            <div key={employee.id} className="flex border-b border-silver-soft hover:bg-gray-50/50 transition-colors group">
-              {/* Employee Info */}
-              <div className="w-64 flex-shrink-0 p-4 border-r border-silver-soft flex items-center gap-3 bg-white group-hover:bg-gray-50/50 z-10 relative">
-                <img src={employee.avatar} alt={employee.name} className="w-10 h-10 rounded-full border border-silver-soft" />
-                <div>
-                  <p className="font-bold text-obsidian text-sm">{employee.name}</p>
-                  <p className="text-xs text-silver-dark">{employee.role}</p>
-                </div>
-              </div>
-              
-              {/* Timeline Row */}
-              <div className="flex-1 relative min-h-[72px]">
-                {/* Background Grid Lines */}
-                <div className="absolute inset-0 flex pointer-events-none">
-                  {hours.map((hour) => (
-                    <div key={hour} className="flex-1 border-r border-silver-soft/30 h-full" />
-                  ))}
-                </div>
+      {/* Drag hint */}
+      <p className="text-xs text-gray-400 mb-4">
+        Drag shifts to reassign. Click × to remove a shift.
+      </p>
 
-                {/* Shift Blocks */}
-                {SHIFTS.filter(s => s.employeeId === employee.id).map(shift => {
-                  // Calculate position (each hour block is 1 unit of flex-1, meaning we map it to %)
-                  // Total hours displayed = 13 (6 to 18)
-                  // Let's use left % and width % for absolute positioning
-                  const totalHours = hours.length;
-                  const startOffset = Math.max(0, shift.startHour - hours[0]);
-                  const leftPercent = (startOffset / totalHours) * 100;
-                  const widthPercent = (shift.duration / totalHours) * 100;
-
+      {/* Grid */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-auto">
+        <table className="min-w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-white border-b border-r border-gray-100 px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 w-40">
+                Employee
+              </th>
+              {days.map((d) => (
+                <th
+                  key={d}
+                  className="border-b border-gray-100 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-400 min-w-[120px]"
+                >
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map((emp) => (
+              <tr key={emp} className="border-b border-gray-50">
+                <td className="sticky left-0 z-10 bg-white border-r border-gray-100 px-5 py-3 font-medium text-gray-800 text-xs">
+                  {emp}
+                </td>
+                {days.map((_, dayIdx) => {
+                  const dayShifts = getShifts(emp, dayIdx);
                   return (
-                    <div 
-                      key={shift.id}
-                      className={`absolute top-3 bottom-3 rounded-lg shadow-sm ${shift.color} text-white p-2 text-xs flex flex-col justify-center cursor-pointer hover:opacity-90 transition-opacity border border-black/10`}
-                      style={{ 
-                        left: `${leftPercent}%`, 
-                        width: `${widthPercent}%`,
-                        // Slight margin to prevent overlap visually
-                        marginLeft: '2px',
-                        marginRight: '2px'
-                      }}
-                      title={`${shift.site} (${shift.duration} hrs)`}
+                    <td
+                      key={dayIdx}
+                      className="px-2 py-2 align-top border-r border-gray-50 last:border-0"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDrop(emp, dayIdx)}
                     >
-                      <div className="font-bold truncate">{shift.site}</div>
-                      <div className="truncate opacity-90">{shift.startHour > 12 ? shift.startHour - 12 : shift.startHour}{shift.startHour >= 12 ? 'pm' : 'am'} - {shift.startHour + shift.duration > 12 ? shift.startHour + shift.duration - 12 : shift.startHour + shift.duration}{(shift.startHour + shift.duration) >= 12 ? 'pm' : 'am'}</div>
-                    </div>
+                      {dayShifts.map((shift) => (
+                        <div
+                          key={shift.id}
+                          draggable
+                          onDragStart={() => setDragId(shift.id)}
+                          className={`mb-1 rounded-lg border px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing ${shift.color}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{shift.start} – {shift.end}</div>
+                              <div className="opacity-70 text-[10px]">{shift.job}</div>
+                            </div>
+                            <button
+                              onClick={() => removeShift(shift.id)}
+                              className="ml-1 opacity-40 hover:opacity-100 font-bold text-[10px]"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {dayShifts.length === 0 && (
+                        <div className="h-8 rounded-lg border border-dashed border-gray-200 text-center text-xs text-gray-200 flex items-center justify-center">
+                          drop here
+                        </div>
+                      )}
+                    </td>
                   );
                 })}
-              </div>
-            </div>
-          ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-          {/* Open Shifts Row */}
-          <div className="flex border-b border-silver-soft bg-orange-50/30 group">
-             <div className="w-64 flex-shrink-0 p-4 border-r border-silver-soft flex items-center gap-3 z-10 relative">
-                <div className="w-10 h-10 rounded-full border border-dashed border-silver-medium flex items-center justify-center bg-white text-silver-dark">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-bold text-obsidian text-sm">Open Shifts</p>
-                  <p className="text-xs text-silver-dark">Unassigned</p>
-                </div>
-              </div>
-              <div className="flex-1 relative min-h-[72px]">
-                <div className="absolute inset-0 flex pointer-events-none">
-                  {hours.map((hour) => (
-                    <div key={hour} className="flex-1 border-r border-silver-soft/30 h-full" />
-                  ))}
-                </div>
-                {/* Example Open Shift */}
-                <div 
-                  className="absolute top-3 bottom-3 rounded-lg shadow-sm bg-white border-2 border-dashed border-brand-coral text-brand-coral p-2 text-xs flex flex-col justify-center cursor-pointer hover:bg-brand-coral/5 transition-colors"
-                  style={{ left: `${(2/13)*100}%`, width: `${(6/13)*100}%`, marginLeft: '2px', marginRight: '2px' }}
-                >
-                  <div className="font-bold truncate">Site Inspection</div>
-                  <div className="truncate">8am - 2pm • Any role</div>
-                </div>
-              </div>
-          </div>
-        </div>
-      </Card>
+      <div className="mt-4 flex gap-4 text-xs text-gray-400">
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-blue-200" /> Riverside Complex</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-green-200" /> Harbor View</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-purple-200" /> Office</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-orange-200" /> Metro Clinic</span>
+      </div>
     </div>
   );
 }
