@@ -34,8 +34,8 @@ export default function EmployeePortalPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 justify-center">
-            <Image src="/hourglass.png" alt="Peachy" width={40} height={40} />
-            <span className="text-2xl font-bold text-gray-900">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={40} height={40} />
+            <span className="text-2xl font-bold text-gray-900">GlassHour</span>
           </Link>
           <p className="mt-2 text-gray-500 text-sm">Employee Self-Service Portal</p>
         </div>
@@ -125,8 +125,8 @@ function EmployeeDashboard({ badgeId }: { badgeId: string }) {
       <div className="max-w-md mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-2">
-            <Image src="/hourglass.png" alt="Peachy" width={28} height={28} />
-            <span className="font-bold text-gray-900">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={28} height={28} />
+            <span className="font-bold text-gray-900">GlassHour</span>
           </div>
           <span className="text-sm text-gray-500 font-mono">{badgeId}</span>
         </div>

@@ -31,8 +31,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 justify-center">
-            <Image src="/hourglass.png" alt="Peachy" width={40} height={40} />
-            <span className="text-2xl font-bold text-gray-900">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={40} height={40} />
+            <span className="text-2xl font-bold text-gray-900">GlassHour</span>
           </Link>
           <p className="mt-3 text-gray-500">Sign in to your account</p>
         </div>

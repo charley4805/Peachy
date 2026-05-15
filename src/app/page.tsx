@@ -143,8 +143,8 @@ export default function Home() {
       <nav className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/hourglass.png" alt="Peachy" width={32} height={32} />
-            <span className="text-xl font-bold text-gray-900">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={32} height={32} />
+            <span className="text-xl font-bold text-gray-900">GlassHour</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
             <a href="#features" className="hover:text-gray-900">Features</a>
@@ -203,11 +203,11 @@ export default function Home() {
         </p>
       </section>
 
-      {/* Why Peachy */}
+      {/* Why GlassHour */}
       <section className="bg-gray-50 py-16">
         <div className="mx-auto max-w-7xl px-6">
           <h2 className="text-center text-sm font-semibold uppercase tracking-wider text-gray-400 mb-10">
-            Each competitor forces a tradeoff. Peachy doesn&apos;t.
+            Each competitor forces a tradeoff. GlassHour doesn&apos;t.
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {competitors.map((c) => (
@@ -221,7 +221,7 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-8 text-center text-gray-500 text-sm max-w-2xl mx-auto">
-            Peachy combines the job-costing depth of ClockShark, the free tier of
+            GlassHour combines the job-costing depth of ClockShark, the free tier of
             Connecteam, the channel economics of SwipeClock, the offline engine of
             FieldClock, and the POS integrations of Homebase — in one product.
           </p>
@@ -373,7 +373,7 @@ export default function Home() {
                 Channel Partner Program
               </div>
               <h2 className="text-3xl font-bold text-white mb-6">
-                Grow your practice with Peachy
+                Grow your practice with GlassHour
               </h2>
               <p className="text-gray-400 text-lg leading-relaxed mb-8">
                 Payroll providers, PEOs, bookkeepers, and CPA firms earn
@@ -453,8 +453,8 @@ export default function Home() {
       <footer className="border-t border-gray-100 py-12">
         <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <Image src="/hourglass.png" alt="Peachy" width={24} height={24} />
-            <span className="font-semibold text-gray-700">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={24} height={24} />
+            <span className="font-semibold text-gray-700">GlassHour</span>
           </div>
           <div className="flex gap-8 text-sm text-gray-400">
             <a href="#features" className="hover:text-gray-600">Features</a>
@@ -463,7 +463,7 @@ export default function Home() {
             <Link href="/login" className="hover:text-gray-600">Sign In</Link>
           </div>
           <div className="text-sm text-gray-400">
-            © 2026 Peachy. All rights reserved.
+            © 2026 GlassHour. All rights reserved.
           </div>
         </div>
       </footer>

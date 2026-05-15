@@ -19,8 +19,8 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
       <aside className="w-56 flex-shrink-0 bg-gray-900 flex flex-col">
         <div className="px-5 py-5 flex flex-col border-b border-gray-800">
           <div className="flex items-center gap-2.5 mb-1">
-            <Image src="/hourglass.png" alt="Peachy" width={24} height={24} />
-            <span className="font-bold text-white">Peachy</span>
+            <Image src="/hourglass.png" alt="GlassHour" width={24} height={24} />
+            <span className="font-bold text-white">GlassHour</span>
           </div>
           <span className="text-xs text-orange-400 font-medium">Partner Portal</span>
         </div>

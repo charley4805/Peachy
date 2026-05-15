@@ -343,7 +343,7 @@ function IntegrationsTab({ onSave }: { onSave: () => void }) {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-6">
-        Connect Peachy to your payroll provider, accounting system, and POS.
+        Connect GlassHour to your payroll provider, accounting system, and POS.
       </p>
       <div className="grid grid-cols-2 gap-4">
         {integrations.map((i) => (
@@ -370,7 +370,7 @@ function IntegrationsTab({ onSave }: { onSave: () => void }) {
       <div className="mt-8 bg-gray-50 rounded-xl border border-gray-100 p-6">
         <h3 className="font-semibold text-gray-800 mb-2">REST API & Webhooks</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Use the Peachy API to build custom integrations. OAuth 2.0 + API key authentication.
+          Use the GlassHour API to build custom integrations. OAuth 2.0 + API key authentication.
         </p>
         <div className="flex gap-3">
           <button className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">

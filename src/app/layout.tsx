@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Peachy — Time & Attendance",
+  title: "GlassHour — Time & Attendance",
   description:
     "The offline-first, industry-specific time and attendance platform built for field crews, deskless workers, and multi-location businesses.",
 };
