@@ -26,8 +26,8 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="w-56 flex-shrink-0 bg-gray-900 flex flex-col">
         <div className="px-5 py-5 flex items-center gap-2.5 border-b border-gray-800">
-          <Image src="/hourglass.png" alt="GlassHour" width={28} height={28} />
-          <span className="font-bold text-white text-lg">GlassHour</span>
+          <Image src="/hourglass.png" alt="Daily" width={28} height={28} />
+          <span className="font-bold text-white text-lg">Daily</span>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
