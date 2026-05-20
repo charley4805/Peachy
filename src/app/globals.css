@@ -38,10 +38,9 @@ body {
   background: linear-gradient(135deg, var(--color-brand-coral) 0%, var(--color-brand-purple) 100%);
   color: white;
   transition: all 0.3s ease;
-}
-
-@utility btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 20px -10px var(--color-brand-purple);
+  &:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -10px var(--color-brand-purple);
+  }
 }
