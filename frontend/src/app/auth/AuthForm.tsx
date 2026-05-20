@@ -47,7 +47,7 @@ function PasswordStrength({ password }: { password: string }) {
 const inputClass =
   "w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-colors bg-white";
 
-export default function AuthPage() {
+export default function AuthForm() {
   const router = useRouter();
   const supabase = createClient();
   const [mode, setMode] = useState<Mode>("signin");

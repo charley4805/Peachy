@@ -21,7 +21,7 @@ const INDUSTRIES = [
 const inputClass =
   "w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition-colors bg-white";
 
-export default function ProfileOnboardingPage() {
+export default function ProfileForm() {
   const router = useRouter();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);

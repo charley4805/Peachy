@@ -58,7 +58,7 @@ const SERVICES = [
 
 type ServiceSlug = (typeof SERVICES)[number]["slug"];
 
-export default function ServicesOnboardingPage() {
+export default function ServicesForm() {
   const router = useRouter();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
