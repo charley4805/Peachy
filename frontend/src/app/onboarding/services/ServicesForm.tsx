@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -59,7 +58,6 @@ const SERVICES = [
 type ServiceSlug = (typeof SERVICES)[number]["slug"];
 
 export default function ServicesForm() {
-  const router = useRouter();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const [selected, setSelected] = useState<Set<ServiceSlug>>(new Set(["time-attendance"]));
@@ -68,7 +66,7 @@ export default function ServicesForm() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return router.replace("/auth");
+      if (!user) { window.location.replace("/auth"); return; }
       setUser(user);
     });
   }, []);
@@ -123,8 +121,9 @@ export default function ServicesForm() {
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    // Hard navigation so the middleware's Supabase read sees the committed
+    // onboarding_complete = true before deciding where to send the user.
+    window.location.replace("/dashboard");
   }
 
   return (
