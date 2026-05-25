@@ -109,11 +109,11 @@ export default function ServicesForm() {
       return;
     }
 
-    // Mark onboarding complete
+    // Mark onboarding complete — upsert handles the case where the profile
+    // row wasn't auto-created (e.g. user signed up before migration ran).
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ onboarding_complete: true })
-      .eq("id", user.id);
+      .upsert({ id: user.id, onboarding_complete: true }, { onConflict: "id" });
 
     if (profileError) {
       setError(profileError.message);
