@@ -10,8 +10,42 @@
 create extension if not exists pgcrypto;
 
 -- ============================================================
--- HELPER: current user's org_id (used in RLS policies)
--- SECURITY DEFINER so it bypasses RLS on org_members
+-- ORGANIZATIONS
+-- Created first so org_members can reference it.
+-- RLS policies are applied after my_org_id() is defined below.
+-- ============================================================
+create table public.organizations (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  industry   text,
+  owner_id   uuid references auth.users on delete set null,
+  plan       text not null default 'free',   -- free|starter|pro|enterprise
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create trigger organizations_updated_at
+  before update on public.organizations
+  for each row execute procedure public.set_updated_at();
+
+-- ============================================================
+-- ORG MEMBERS
+-- Created second so my_org_id() (below) can reference it.
+-- ============================================================
+create table public.org_members (
+  id        uuid primary key default gen_random_uuid(),
+  org_id    uuid references public.organizations on delete cascade not null,
+  user_id   uuid references auth.users on delete cascade not null,
+  role      text not null default 'admin',   -- owner|admin|manager
+  joined_at timestamptz not null default now(),
+  unique (org_id, user_id)
+);
+
+-- ============================================================
+-- HELPER: current user's org_id
+-- Defined AFTER org_members exists — SQL functions are validated
+-- at creation time, so the table must already exist.
+-- SECURITY DEFINER bypasses RLS when reading org_members.
 -- ============================================================
 create or replace function public.my_org_id()
 returns uuid
@@ -26,20 +60,8 @@ as $$
 $$;
 
 -- ============================================================
--- ORGANIZATIONS
--- One per company account; created automatically when a user
--- sets onboarding_complete = true on their profile.
+-- RLS: ORGANIZATIONS
 -- ============================================================
-create table public.organizations (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,
-  industry   text,
-  owner_id   uuid references auth.users on delete set null,
-  plan       text not null default 'free',   -- free|starter|pro|enterprise
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 alter table public.organizations enable row level security;
 
 create policy "Org members can view their organization"
@@ -50,27 +72,11 @@ create policy "Org owner can update their organization"
   on public.organizations for update
   using (owner_id = auth.uid());
 
-create trigger organizations_updated_at
-  before update on public.organizations
-  for each row execute procedure public.set_updated_at();
-
 -- ============================================================
--- ORG MEMBERS
--- Users who have dashboard access to an organization.
+-- RLS: ORG MEMBERS
 -- ============================================================
-create table public.org_members (
-  id        uuid primary key default gen_random_uuid(),
-  org_id    uuid references public.organizations on delete cascade not null,
-  user_id   uuid references auth.users on delete cascade not null,
-  role      text not null default 'admin',   -- owner|admin|manager
-  joined_at timestamptz not null default now(),
-  unique (org_id, user_id)
-);
-
 alter table public.org_members enable row level security;
 
--- Users can always see their own membership records
--- (my_org_id() uses SECURITY DEFINER so no circular issue)
 create policy "Members can view their own membership"
   on public.org_members for select
   using (user_id = auth.uid());
@@ -111,7 +117,6 @@ create trigger on_onboarding_complete
 
 -- ============================================================
 -- LOCATIONS / GEOFENCES
--- Job sites with GPS coordinates for clock-in validation.
 -- ============================================================
 create table public.locations (
   id              uuid primary key default gen_random_uuid(),
@@ -139,8 +144,6 @@ create trigger locations_updated_at
 
 -- ============================================================
 -- JOBS
--- Job costing hierarchy: Customer > Job.
--- Phases and tasks can be added in a follow-up migration.
 -- ============================================================
 create table public.jobs (
   id          uuid primary key default gen_random_uuid(),
@@ -171,8 +174,6 @@ create trigger jobs_updated_at
 
 -- ============================================================
 -- EMPLOYEES
--- Managed by the org admin; NOT linked to auth.users.
--- Employee portal uses badge + PIN (see employee_pins table).
 -- ============================================================
 create table public.employees (
   id         uuid primary key default gen_random_uuid(),
@@ -206,27 +207,24 @@ create trigger employees_updated_at
   for each row execute procedure public.set_updated_at();
 
 -- ============================================================
--- EMPLOYEE PINS
--- Hashed PINs for the employee portal (badge + PIN login).
--- No RLS select/update — accessed only via service role key.
+-- EMPLOYEE PINS (portal badge + PIN login)
+-- No anon RLS — accessed only via service-role key in API routes.
 -- ============================================================
 create table public.employee_pins (
   employee_id uuid references public.employees on delete cascade primary key,
-  pin_hash    text not null,    -- scrypt hash: salt:hash
+  pin_hash    text not null,    -- scrypt format: salt:hash
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
 
 alter table public.employee_pins enable row level security;
 
--- No public access — API routes use the service-role key
 create policy "No anon access to pins"
   on public.employee_pins for all
   using (false);
 
 -- ============================================================
 -- SCHEDULE ENTRIES
--- Planned shifts, PTO, vacation, and holidays.
 -- ============================================================
 create table public.schedule_entries (
   id          uuid primary key default gen_random_uuid(),
@@ -255,8 +253,7 @@ create trigger schedule_entries_updated_at
   for each row execute procedure public.set_updated_at();
 
 -- ============================================================
--- TIME ENTRIES
--- Actual clock-in / clock-out records with GPS coordinates.
+-- TIME ENTRIES (clock-in / clock-out)
 -- ============================================================
 create table public.time_entries (
   id              uuid primary key default gen_random_uuid(),
@@ -271,7 +268,7 @@ create table public.time_entries (
   clock_out_lng   numeric(10, 7),
   break_minutes   int not null default 0,
   notes           text,
-  flagged         boolean not null default false,   -- missed punch-out, geofence violation, etc.
+  flagged         boolean not null default false,
   flag_reason     text,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
@@ -290,7 +287,6 @@ create trigger time_entries_updated_at
 
 -- ============================================================
 -- TIMESHEETS
--- One row per employee per pay period; computed from time_entries.
 -- ============================================================
 create table public.timesheets (
   id             uuid primary key default gen_random_uuid(),
@@ -324,7 +320,6 @@ create trigger timesheets_updated_at
 
 -- ============================================================
 -- PTO REQUESTS
--- Employee requests for time off; reviewed by managers.
 -- ============================================================
 create table public.pto_requests (
   id            uuid primary key default gen_random_uuid(),
@@ -361,7 +356,7 @@ create table public.pay_rules (
   org_id              uuid references public.organizations on delete cascade primary key,
   ot_threshold_weekly numeric(5, 2) not null default 40,
   ot_multiplier       numeric(4, 2) not null default 1.5,
-  rounding_minutes    int not null default 0,       -- 0 = exact, 6, 15
+  rounding_minutes    int not null default 0,
   break_enforcement   boolean not null default false,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
@@ -378,7 +373,7 @@ create trigger pay_rules_updated_at
   before update on public.pay_rules
   for each row execute procedure public.set_updated_at();
 
--- Auto-create pay_rules when org is created
+-- Auto-create default pay_rules when a new org is created
 create or replace function public.handle_new_organization()
 returns trigger
 language plpgsql
@@ -397,7 +392,7 @@ create trigger on_organization_created
   for each row execute procedure public.handle_new_organization();
 
 -- ============================================================
--- PARTNER ACCOUNTS (reseller program)
+-- PARTNER ACCOUNTS
 -- ============================================================
 create table public.partner_accounts (
   id             uuid primary key default gen_random_uuid(),
@@ -412,9 +407,9 @@ create table public.partner_accounts (
 
 alter table public.partner_accounts enable row level security;
 
-create policy "Partners can view and update their own account"
+create policy "Partners can manage their own account"
   on public.partner_accounts for all
-  using (user_id = auth.uid())
+  using  (user_id = auth.uid())
   with check (user_id = auth.uid());
 
 create trigger partner_accounts_updated_at
@@ -489,8 +484,8 @@ create policy "Partners can view their invoices"
   );
 
 -- ============================================================
--- ENABLE REALTIME on key tables
--- (also enable in Supabase Dashboard > Database > Replication)
+-- REALTIME
+-- Also toggle these on in: Dashboard > Database > Replication
 -- ============================================================
 alter publication supabase_realtime add table public.time_entries;
 alter publication supabase_realtime add table public.schedule_entries;
