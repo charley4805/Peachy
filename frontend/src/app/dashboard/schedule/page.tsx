@@ -260,6 +260,10 @@ export default function SchedulePage() {
   const [entries, setEntries] = useState<ScheduleEntry[]>(initialEntries);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week (May 25)
   const [viewMode, setViewMode] = useState<ViewMode>("week");
+  // monthViewDate tracks which month the calendar is showing (independent of weekOffset)
+  const [monthViewDate, setMonthViewDate] = useState(
+    new Date(TODAY.getFullYear(), TODAY.getMonth(), 1)
+  );
   const [published, setPublished] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -276,11 +280,10 @@ export default function SchedulePage() {
 
   const weekDates = getWeekDates(weekOffset);
   const weekStart = weekDates[0];
-  const weekEnd = weekDates[6];
 
-  const monthCalendar = getMonthCalendar(weekStart);
-  const currentMonth = weekStart.getMonth();
-  const currentYear = weekStart.getFullYear();
+  const currentMonth = monthViewDate.getMonth();
+  const currentYear = monthViewDate.getFullYear();
+  const monthCalendar = getMonthCalendar(monthViewDate);
 
   const todayStr = formatDate(TODAY);
 
@@ -372,16 +375,29 @@ export default function SchedulePage() {
     setWeekOffset(weekOffsetForDate(parseLocalDate(addForm.date)));
   }
 
+  // ── View mode switch (syncs monthViewDate when entering month view) ─────────
+
+  function switchViewMode(v: ViewMode) {
+    if (v === "month") {
+      // Anchor to the month containing the currently viewed week
+      setMonthViewDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), 1));
+    }
+    setViewMode(v);
+  }
+
   // ── Month navigation ────────────────────────────────────────────────────────
 
   function prevMonth() {
-    const first = new Date(currentYear, currentMonth - 1, 1);
-    setWeekOffset(weekOffsetForDate(first));
+    setMonthViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   }
 
   function nextMonth() {
-    const first = new Date(currentYear, currentMonth + 1, 1);
-    setWeekOffset(weekOffsetForDate(first));
+    setMonthViewDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  }
+
+  function goToToday() {
+    setWeekOffset(0);
+    setMonthViewDate(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -400,19 +416,19 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+          {/* View toggle — large, prominent */}
+          <div className="flex rounded-xl border-2 border-gray-200 overflow-hidden text-sm shadow-sm">
             {(["week", "month"] as ViewMode[]).map((v) => (
               <button
                 key={v}
-                onClick={() => setViewMode(v)}
-                className={`px-4 py-2 font-medium capitalize transition-colors ${
+                onClick={() => switchViewMode(v)}
+                className={`px-5 py-2.5 font-semibold capitalize transition-colors ${
                   viewMode === v
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    ? "bg-orange-500 text-white"
+                    : "bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-600"
                 }`}
               >
-                {v}
+                {v === "week" ? "📅 Week" : "🗓 Month"}
               </button>
             ))}
           </div>
@@ -427,7 +443,7 @@ export default function SchedulePage() {
                 ‹ Prev
               </button>
               <button
-                onClick={() => setWeekOffset(0)}
+                onClick={goToToday}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Today
@@ -448,7 +464,7 @@ export default function SchedulePage() {
                 ‹ Prev
               </button>
               <button
-                onClick={() => setWeekOffset(0)}
+                onClick={goToToday}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Today
