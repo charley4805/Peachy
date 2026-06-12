@@ -24,6 +24,7 @@ export async function PUT(
         phone:      body.phone?.trim() ?? null,
         status:     body.status,
         hire_date:  body.hireDate,
+        pto_allowance_hours: body.ptoAllowanceHours,
       })
       .eq('id', id)
       .eq('org_id', orgId)   // RLS safety: ensure record belongs to org

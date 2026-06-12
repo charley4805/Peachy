@@ -33,6 +33,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/' ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/employee-portal') ||
+    pathname.startsWith('/invite') ||
     pathname.startsWith('/legal') ||
     pathname.startsWith('/partner')
 
@@ -54,6 +55,19 @@ export async function proxy(request: NextRequest) {
       pathname.startsWith('/onboarding')
 
     if (needsOnboardingCheck) {
+      // Accounts created via an employee invite link belong in the
+      // employee app, not the manager dashboard / onboarding flow.
+      const { data: employeeRec } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle()
+
+      if (employeeRec) {
+        return NextResponse.redirect(new URL('/employee', request.url))
+      }
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('onboarding_complete')

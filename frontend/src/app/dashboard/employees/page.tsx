@@ -1,30 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Employee = {
   id: string;
   name: string;
   badge: string;
   role: "Employee" | "Crew Leader" | "Manager" | "Admin";
-  department: string;
-  payType: string;
-  rate: string;
+  department: string | null;
+  pay_type: string;
+  pay_rate: number | null;
+  pay_unit: string;
   status: "Active" | "Inactive";
-  hireDate: string;
-  email: string;
-  phone: string;
+  hire_date: string | null;
+  email: string | null;
+  phone: string | null;
+  user_id: string | null;
+  invite_token: string | null;
+  invite_sent_at: string | null;
 };
-
-const initialEmployees: Employee[] = [
-  { id: "1", name: "Marcus Rivera", badge: "EMP-1042", role: "Crew Leader", department: "Construction", payType: "Hourly", rate: "$28.00/hr", status: "Active", hireDate: "Mar 12, 2024", email: "marcus.rivera@example.com", phone: "(555) 201-4421" },
-  { id: "2", name: "Deja Williams", badge: "EMP-1087", role: "Employee", department: "Construction", payType: "Hourly", rate: "$22.50/hr", status: "Active", hireDate: "Jul 8, 2024", email: "deja.williams@example.com", phone: "(555) 309-8812" },
-  { id: "3", name: "Tom Kowalski", badge: "EMP-1031", role: "Employee", department: "Construction", payType: "Hourly", rate: "$21.00/hr", status: "Active", hireDate: "Jan 5, 2023", email: "tom.kowalski@example.com", phone: "(555) 418-3304" },
-  { id: "4", name: "Anita Patel", badge: "EMP-1056", role: "Manager", department: "Operations", payType: "Salary", rate: "$72,000/yr", status: "Active", hireDate: "Nov 1, 2022", email: "anita.patel@example.com", phone: "(555) 507-2215" },
-  { id: "5", name: "Carlos Mendoza", badge: "EMP-1063", role: "Employee", department: "Construction", payType: "Piecework", rate: "$3.50/unit", status: "Active", hireDate: "Apr 19, 2024", email: "carlos.mendoza@example.com", phone: "(555) 614-9987" },
-  { id: "6", name: "Jordan Lee", badge: "EMP-1094", role: "Employee", department: "Cleaning", payType: "Hourly", rate: "$18.00/hr", status: "Active", hireDate: "Oct 3, 2024", email: "jordan.lee@example.com", phone: "(555) 723-5530" },
-  { id: "7", name: "Patricia Gomez", badge: "EMP-1018", role: "Employee", department: "Healthcare", payType: "Hourly", rate: "$26.00/hr", status: "Inactive", hireDate: "Feb 14, 2022", email: "patricia.gomez@example.com", phone: "(555) 832-6678" },
-];
 
 const roleBadge: Record<string, string> = {
   Employee: "bg-gray-100 text-gray-600",
@@ -36,6 +30,7 @@ const roleBadge: Record<string, string> = {
 const ROLES: Employee["role"][] = ["Employee", "Crew Leader", "Manager", "Admin"];
 const DEPARTMENTS = ["Construction", "Cleaning", "Healthcare", "Operations", "Agriculture"];
 const PAY_TYPES = ["Hourly", "Salary", "Piecework"];
+const PAY_UNIT: Record<string, string> = { Hourly: "hr", Salary: "yr", Piecework: "unit" };
 
 type FormState = {
   name: string;
@@ -54,11 +49,36 @@ const blankForm: FormState = {
   department: "Construction",
   role: "Employee",
   payType: "Hourly",
-  rate: "$20.00/hr",
+  rate: "20.00",
 };
 
+function fmtRate(emp: Employee): string {
+  if (emp.pay_rate == null) return "—";
+  const amount = Number(emp.pay_rate).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+  return `${amount}/${emp.pay_unit}`;
+}
+
+function fmtHireDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function parseRate(raw: string): number | null {
+  const n = Number(raw.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
 
@@ -67,13 +87,33 @@ export default function EmployeesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(blankForm);
+  const [saving, setSaving] = useState(false);
+
+  // Invite modal state
+  const [inviteFor, setInviteFor] = useState<Employee | null>(null);
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(() => {
+    return fetch("/api/employees")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setEmployees(data))
+      .catch(() => setPageError("Could not load employees. Are you signed in?"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = employees.filter((e) => {
+    const q = search.toLowerCase();
     const matchSearch =
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.badge.toLowerCase().includes(search.toLowerCase()) ||
-      e.email.toLowerCase().includes(search.toLowerCase()) ||
-      e.phone.includes(search);
+      e.name.toLowerCase().includes(q) ||
+      e.badge.toLowerCase().includes(q) ||
+      (e.email ?? "").toLowerCase().includes(q) ||
+      (e.phone ?? "").includes(search);
     const matchFilter =
       filter === "All" || e.status === filter || e.department === filter;
     return matchSearch && matchFilter;
@@ -88,12 +128,12 @@ export default function EmployeesPage() {
   function openEdit(emp: Employee) {
     setForm({
       name: emp.name,
-      email: emp.email,
-      phone: emp.phone,
-      department: emp.department,
+      email: emp.email ?? "",
+      phone: emp.phone ?? "",
+      department: emp.department ?? "Construction",
       role: emp.role,
-      payType: emp.payType,
-      rate: emp.rate,
+      payType: emp.pay_type,
+      rate: emp.pay_rate != null ? String(emp.pay_rate) : "",
     });
     setEditId(emp.id);
     setShowAdd(false);
@@ -104,64 +144,169 @@ export default function EmployeesPage() {
     setEditId(null);
   }
 
-  function saveAdd() {
-    if (!form.name.trim()) return;
-    const next: Employee = {
-      id: String(Date.now()),
-      name: form.name.trim(),
-      badge: `EMP-${1100 + employees.length}`,
-      role: form.role,
-      department: form.department,
-      payType: form.payType,
-      rate: form.rate,
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      status: "Active",
-      hireDate: "May 25, 2026",
-    };
-    setEmployees((prev) => [next, ...prev]);
+  async function saveAdd() {
+    if (!form.name.trim() || saving) return;
+    setSaving(true);
+    const res = await fetch("/api/employees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        department: form.department,
+        role: form.role,
+        payType: form.payType,
+        payRate: parseRate(form.rate),
+        payUnit: PAY_UNIT[form.payType] ?? "hr",
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setPageError(data.error ?? "Could not add employee");
+      return;
+    }
     setShowAdd(false);
+    await load();
   }
 
-  function saveEdit() {
-    if (!editId || !form.name.trim()) return;
-    setEmployees((prev) =>
-      prev.map((e) =>
-        e.id === editId
-          ? {
-              ...e,
-              name: form.name.trim(),
-              email: form.email.trim(),
-              phone: form.phone.trim(),
-              department: form.department,
-              role: form.role,
-              payType: form.payType,
-              rate: form.rate,
-            }
-          : e
-      )
-    );
+  async function saveEdit() {
+    if (!editId || !form.name.trim() || saving) return;
+    const current = employees.find((e) => e.id === editId);
+    setSaving(true);
+    const res = await fetch(`/api/employees/${editId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        department: form.department,
+        role: form.role,
+        payType: form.payType,
+        payRate: parseRate(form.rate),
+        payUnit: PAY_UNIT[form.payType] ?? "hr",
+        status: current?.status,
+        hireDate: current?.hire_date,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setPageError(data.error ?? "Could not save changes");
+      return;
+    }
     setEditId(null);
+    await load();
   }
 
-  function doDelete() {
+  async function doDelete() {
     if (!deleteId) return;
-    setEmployees((prev) => prev.filter((e) => e.id !== deleteId));
+    const res = await fetch(`/api/employees/${deleteId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      setPageError(data.error ?? "Could not delete employee");
+    }
     setDeleteId(null);
+    await load();
   }
 
-  function toggleStatus(id: string) {
-    setEmployees((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, status: e.status === "Active" ? "Inactive" : "Active" }
-          : e
-      )
-    );
+  async function toggleStatus(emp: Employee) {
+    await fetch(`/api/employees/${emp.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: emp.name,
+        email: emp.email,
+        phone: emp.phone,
+        department: emp.department,
+        role: emp.role,
+        payType: emp.pay_type,
+        payRate: emp.pay_rate,
+        payUnit: emp.pay_unit,
+        hireDate: emp.hire_date,
+        status: emp.status === "Active" ? "Inactive" : "Active",
+      }),
+    });
+    await load();
+  }
+
+  async function sendInvite(emp: Employee) {
+    setPageError("");
+    if (!emp.email) {
+      setPageError(`Add an email address for ${emp.name} first — it becomes their sign-in email.`);
+      return;
+    }
+    setInviteBusy(true);
+    const res = await fetch(`/api/employees/${emp.id}/invite`, { method: "POST" });
+    const data = await res.json();
+    setInviteBusy(false);
+    if (!res.ok) {
+      setPageError(data.error ?? "Could not create invite link");
+      return;
+    }
+    setInviteFor(emp);
+    setInviteUrl(data.invite_url);
+    setCopied(false);
+    await load();
+  }
+
+  function showExistingInvite(emp: Employee) {
+    if (!emp.invite_token) return;
+    setInviteFor(emp);
+    setInviteUrl(`${window.location.origin}/invite/${emp.invite_token}`);
+    setCopied(false);
+  }
+
+  async function revokeInvite(emp: Employee) {
+    await fetch(`/api/employees/${emp.id}/invite`, { method: "DELETE" });
+    setInviteFor(null);
+    await load();
+  }
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable — the link is visible to copy manually
+    }
   }
 
   const isModalOpen = showAdd || editId !== null;
   const deleteTarget = employees.find((e) => e.id === deleteId);
+
+  function accountCell(emp: Employee) {
+    if (emp.user_id) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+          ✓ Active
+        </span>
+      );
+    }
+    if (emp.invite_token) {
+      return (
+        <button
+          onClick={() => showExistingInvite(emp)}
+          className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-100"
+          title="View invite link"
+        >
+          ✉ Invited
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={() => sendInvite(emp)}
+        disabled={inviteBusy}
+        className="rounded-full border border-orange-200 px-2.5 py-1 text-xs font-medium text-orange-500 hover:bg-orange-50 disabled:opacity-50"
+      >
+        Invite
+      </button>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -180,6 +325,74 @@ export default function EmployeesPage() {
           + Add Employee
         </button>
       </div>
+
+      {pageError && (
+        <div className="mb-5 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700 flex justify-between items-center">
+          {pageError}
+          <button onClick={() => setPageError("")} className="text-red-400 hover:text-red-600 ml-4">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Invite Link Modal */}
+      {inviteFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">
+              Invite link for {inviteFor.name}
+            </h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Send this link to{" "}
+              <span className="font-medium text-gray-700">{inviteFor.email}</span>. They&apos;ll
+              use it to create their account and access their schedule, time clock,
+              timesheet, PTO, and messages.
+            </p>
+
+            <div className="flex gap-2 mb-5">
+              <input
+                readOnly
+                value={inviteUrl}
+                onFocus={(e) => e.target.select()}
+                className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-mono text-gray-600 focus:outline-none"
+              />
+              <button
+                onClick={copyInvite}
+                className="rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 flex-shrink-0"
+              >
+                {copied ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex gap-3">
+                <a
+                  href={`mailto:${inviteFor.email}?subject=${encodeURIComponent(
+                    "Your Daily account invite"
+                  )}&body=${encodeURIComponent(
+                    `Hi ${inviteFor.name.split(" ")[0]},\n\nCreate your Daily account here:\n${inviteUrl}\n\nYou'll be able to clock in and out, see your schedule, request time off, and message the team.`
+                  )}`}
+                  className="text-sm font-medium text-orange-500 hover:text-orange-600"
+                >
+                  Open in email →
+                </a>
+                <button
+                  onClick={() => revokeInvite(inviteFor)}
+                  className="text-sm text-red-400 hover:text-red-600"
+                >
+                  Revoke link
+                </button>
+              </div>
+              <button
+                onClick={() => setInviteFor(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
@@ -209,7 +422,10 @@ export default function EmployeesPage() {
 
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
+                    Email Address{" "}
+                    <span className="text-xs text-gray-400 font-normal">
+                      (needed to invite them to the app)
+                    </span>
                   </label>
                   <input
                     type="email"
@@ -283,14 +499,14 @@ export default function EmployeesPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Rate
+                    Rate (${PAY_UNIT[form.payType] ? `per ${PAY_UNIT[form.payType]}` : ""})
                   </label>
                   <input
                     type="text"
                     value={form.rate}
                     onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
                     className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-400 focus:outline-none"
-                    placeholder="$20.00/hr"
+                    placeholder="20.00"
                   />
                 </div>
               </div>
@@ -305,9 +521,10 @@ export default function EmployeesPage() {
               </button>
               <button
                 onClick={showAdd ? saveAdd : saveEdit}
-                className="flex-1 rounded-lg bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                disabled={saving}
+                className="flex-1 rounded-lg bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
               >
-                {showAdd ? "Add Employee" : "Save Changes"}
+                {saving ? "Saving…" : showAdd ? "Add Employee" : "Save Changes"}
               </button>
             </div>
           </div>
@@ -399,16 +616,13 @@ export default function EmployeesPage() {
                 Role
               </th>
               <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Department
-              </th>
-              <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Pay
               </th>
               <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Hired
+                Status
               </th>
               <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Status
+                App Account
               </th>
               <th className="px-5 py-3" />
             </tr>
@@ -421,10 +635,17 @@ export default function EmployeesPage() {
                     <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 text-xs font-bold flex-shrink-0">
                       {emp.name
                         .split(" ")
+                        .filter(Boolean)
                         .map((n) => n[0])
+                        .slice(0, 2)
                         .join("")}
                     </div>
-                    <span className="font-medium text-gray-800">{emp.name}</span>
+                    <div>
+                      <div className="font-medium text-gray-800">{emp.name}</div>
+                      <div className="text-xs text-gray-400">
+                        {emp.department ?? "—"} · since {fmtHireDate(emp.hire_date)}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5 font-mono text-gray-500">{emp.badge}</td>
@@ -439,12 +660,10 @@ export default function EmployeesPage() {
                     {emp.role}
                   </span>
                 </td>
-                <td className="px-5 py-3.5 text-gray-600">{emp.department}</td>
                 <td className="px-5 py-3.5">
-                  <div className="text-gray-700">{emp.rate}</div>
-                  <div className="text-xs text-gray-400">{emp.payType}</div>
+                  <div className="text-gray-700">{fmtRate(emp)}</div>
+                  <div className="text-xs text-gray-400">{emp.pay_type}</div>
                 </td>
-                <td className="px-5 py-3.5 text-gray-500">{emp.hireDate}</td>
                 <td className="px-5 py-3.5">
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -461,6 +680,7 @@ export default function EmployeesPage() {
                     {emp.status}
                   </span>
                 </td>
+                <td className="px-5 py-3.5">{accountCell(emp)}</td>
                 <td className="px-5 py-3.5">
                   <div className="flex gap-2 items-center whitespace-nowrap">
                     <button
@@ -471,7 +691,7 @@ export default function EmployeesPage() {
                     </button>
                     <span className="text-gray-200">|</span>
                     <button
-                      onClick={() => toggleStatus(emp.id)}
+                      onClick={() => toggleStatus(emp)}
                       className="text-xs text-gray-400 hover:text-gray-600"
                     >
                       {emp.status === "Active" ? "Deactivate" : "Activate"}
@@ -489,11 +709,15 @@ export default function EmployeesPage() {
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 && (
+        {loading ? (
+          <div className="py-12 text-center text-sm text-gray-400">Loading employees…</div>
+        ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-sm text-gray-400">
-            No employees match your search.
+            {employees.length === 0
+              ? "No employees yet. Click “+ Add Employee” to build your roster."
+              : "No employees match your search."}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
