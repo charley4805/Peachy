@@ -4,7 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useMe } from "./me-context";
 
-type Job = { id: string; name: string; customer: string; color: string };
+type JobLocation = {
+  name: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number;
+  validation_mode: string;
+};
+
+type Job = {
+  id: string;
+  name: string;
+  customer: string;
+  color: string;
+  location: JobLocation | JobLocation[] | null;
+};
 
 type Shift = {
   id: string;
@@ -16,13 +31,18 @@ type Shift = {
   job: { name: string; color: string } | { name: string; color: string }[] | null;
 };
 
+type ActiveEntry = {
+  id: string;
+  clock_in: string;
+  job_id: string | null;
+  job:
+    | { name: string; color: string; location: JobLocation | JobLocation[] | null }
+    | { name: string; color: string; location: JobLocation | JobLocation[] | null }[]
+    | null;
+};
+
 type Summary = {
-  active_entry: {
-    id: string;
-    clock_in: string;
-    job_id: string | null;
-    job: { name: string; color: string } | { name: string; color: string }[] | null;
-  } | null;
+  active_entry: ActiveEntry | null;
   today_hours: number;
   week_hours: number;
   upcoming_shifts: Shift[];
@@ -30,8 +50,8 @@ type Summary = {
   pending_pto: number;
 };
 
-function jobOf(j: Shift["job"]): { name: string; color: string } | null {
-  return Array.isArray(j) ? j[0] ?? null : j;
+function one<T>(v: T | T[] | null | undefined): T | null {
+  return (Array.isArray(v) ? v[0] : v) ?? null;
 }
 
 function fmtTime(t: string | null): string {
@@ -50,6 +70,11 @@ function fmtDate(iso: string): string {
   });
 }
 
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function elapsed(since: string): string {
   const ms = Date.now() - new Date(since).getTime();
   const h = Math.floor(ms / 3600000);
@@ -58,16 +83,23 @@ function elapsed(since: string): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function getPosition(): Promise<{ lat: number; lng: number } | null> {
+function getPosition(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
   return new Promise((resolve) => {
     if (!("geolocation" in navigator)) return resolve(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        }),
       () => resolve(null),
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   });
 }
+
+const PING_INTERVAL_MS = 5 * 60 * 1000;
 
 export default function EmployeeHomePage() {
   const { employee } = useMe();
@@ -76,7 +108,6 @@ export default function EmployeeHomePage() {
   const [breakMinutes, setBreakMinutes] = useState("0");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
   const [, setTick] = useState(0);
 
   const load = useCallback(() => {
@@ -98,21 +129,61 @@ export default function EmployeeHomePage() {
     return () => clearInterval(id);
   }, [summary?.active_entry]);
 
+  // Breadcrumbing: send a GPS ping every few minutes while on the clock
+  useEffect(() => {
+    if (!summary?.active_entry) return;
+    let stopped = false;
+
+    function ping() {
+      getPosition().then((pos) => {
+        if (stopped || !pos) return;
+        fetch("/api/me/ping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pos),
+        }).catch(() => {});
+      });
+    }
+
+    const id = setInterval(ping, PING_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [summary?.active_entry]);
+
+  const today = todayIso();
+  const selectedJob = summary?.jobs.find((j) => j.id === jobId) ?? null;
+  const selectedLoc = selectedJob ? one(selectedJob.location) : null;
+  const geofenced =
+    !!selectedLoc?.latitude && !!selectedLoc?.longitude && selectedLoc.validation_mode !== "off";
+
+  // Today's scheduled shift (preferring one for the selected job)
+  const todayShifts = (summary?.upcoming_shifts ?? []).filter(
+    (s) => s.date === today && s.type === "Shift"
+  );
+  const todayShift =
+    todayShifts.find((s) => one(s.job)?.name === selectedJob?.name) ?? todayShifts[0] ?? null;
+
   async function clockIn() {
     setBusy(true);
     setError("");
-    setWarning("");
     const pos = await getPosition();
+    if (geofenced && !pos) {
+      setError(
+        "We couldn't get your location. Location is required to clock in at this job site — enable location services and try again."
+      );
+      setBusy(false);
+      return;
+    }
     const res = await fetch("/api/me/clock-in", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: jobId || undefined, ...pos }),
     });
-    const data = await res.json();
     if (!res.ok) {
+      const data = await res.json();
       setError(data.error ?? "Could not clock in");
-    } else if (data.geofence_warning) {
-      setWarning(`Heads up: you appear to be ${data.geofence_warning}. Your entry was recorded and flagged for review.`);
     }
     await load();
     setBusy(false);
@@ -121,7 +192,6 @@ export default function EmployeeHomePage() {
   async function clockOut() {
     setBusy(true);
     setError("");
-    setWarning("");
     const pos = await getPosition();
     const res = await fetch("/api/me/clock-out", {
       method: "POST",
@@ -138,15 +208,14 @@ export default function EmployeeHomePage() {
   }
 
   const active = summary?.active_entry ?? null;
-  const activeJob = active ? jobOf(active.job) : null;
+  const activeJob = active ? one(active.job) : null;
+  const activeLoc = activeJob ? one(activeJob.location) : null;
   const firstName = employee.name.split(" ")[0];
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Hi, {firstName} 👋
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900">Hi, {firstName} 👋</h1>
         <p className="text-sm text-gray-500 mt-1">
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",
@@ -159,11 +228,6 @@ export default function EmployeeHomePage() {
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
           {error}
-        </div>
-      )}
-      {warning && (
-        <div className="rounded-xl bg-yellow-50 border border-yellow-100 px-4 py-3 text-sm text-yellow-800">
-          {warning}
         </div>
       )}
 
@@ -180,16 +244,41 @@ export default function EmployeeHomePage() {
             <div className="text-4xl font-bold text-gray-900 font-mono tabular-nums">
               {elapsed(active.clock_in)}
             </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Since{" "}
-              {new Date(active.clock_in).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-              {activeJob ? ` · ${activeJob.name}` : ""}
-            </p>
 
-            <div className="mt-5 flex items-center justify-center gap-3">
+            <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-left text-sm space-y-1">
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">Date</span>
+                <span className="font-medium text-gray-800">
+                  {fmtDate(active.clock_in.slice(0, 10))}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">Started</span>
+                <span className="font-medium text-gray-800">
+                  {new Date(active.clock_in).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              {activeJob && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Job</span>
+                  <span className="font-medium text-gray-800">{activeJob.name}</span>
+                </div>
+              )}
+              {activeLoc && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Site</span>
+                  <span className="font-medium text-gray-800 text-right">
+                    📍 {activeLoc.name}
+                    {activeLoc.address ? ` · ${activeLoc.address}` : ""}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-center gap-3">
               <label className="text-xs text-gray-500">
                 Break (min)
                 <input
@@ -209,6 +298,9 @@ export default function EmployeeHomePage() {
             >
               {busy ? "Working on it…" : "Clock Out"}
             </button>
+            <p className="mt-2 text-xs text-gray-400">
+              Location check-ins are recorded while you&apos;re on the clock.
+            </p>
           </div>
         ) : (
           <div className="text-center">
@@ -221,7 +313,7 @@ export default function EmployeeHomePage() {
               <select
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-orange-400 focus:outline-none mb-1"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:border-orange-400 focus:outline-none"
               >
                 <option value="">No job / general work</option>
                 {summary.jobs.map((j) => (
@@ -232,15 +324,54 @@ export default function EmployeeHomePage() {
               </select>
             )}
 
+            {/* Check-in details: site, date, start time */}
+            <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-left text-sm space-y-1">
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">Date</span>
+                <span className="font-medium text-gray-800">{fmtDate(today)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">Start time</span>
+                <span className="font-medium text-gray-800">
+                  {todayShift?.start_time
+                    ? `${fmtTime(todayShift.start_time)} (scheduled)`
+                    : new Date().toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                </span>
+              </div>
+              {selectedLoc ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Job site</span>
+                  <span className="font-medium text-gray-800 text-right">
+                    📍 {selectedLoc.name}
+                    {selectedLoc.address ? ` · ${selectedLoc.address}` : ""}
+                  </span>
+                </div>
+              ) : selectedJob ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Job site</span>
+                  <span className="text-gray-500">No site location set</span>
+                </div>
+              ) : null}
+              {geofenced && (
+                <p className="pt-1 text-xs text-orange-600">
+                  ⚠ You must be within {selectedLoc!.radius_meters}m of this site to
+                  clock in.
+                </p>
+              )}
+            </div>
+
             <button
               onClick={clockIn}
               disabled={busy}
               className="mt-3 w-full rounded-xl bg-green-500 py-4 text-base font-bold text-white hover:bg-green-600 disabled:opacity-60 transition-colors"
             >
-              {busy ? "Working on it…" : "Clock In"}
+              {busy ? "Checking location…" : "Clock In"}
             </button>
             <p className="mt-2 text-xs text-gray-400">
-              Your location is captured at punch for job-site verification.
+              Your location is verified at punch for job-site attendance.
             </p>
           </div>
         )}
@@ -286,7 +417,7 @@ export default function EmployeeHomePage() {
           <p className="text-sm text-gray-400">Nothing scheduled in the next 7 days.</p>
         ) : (
           summary.upcoming_shifts.slice(0, 5).map((s) => {
-            const job = jobOf(s.job);
+            const job = one(s.job);
             return (
               <div
                 key={s.id}

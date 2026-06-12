@@ -53,8 +53,13 @@ export default function EmployeeLayout({
 
   async function signOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    router.replace("/auth");
+    const { data } = await supabase.auth.getSession();
+    await Promise.all([
+      supabase.auth.signOut(),
+      fetch("/api/portal/logout", { method: "POST" }).catch(() => {}),
+    ]);
+    // Badge+PIN sessions go back to the portal; accounts to the sign-in page
+    router.replace(data.session ? "/auth" : "/employee-portal");
   }
 
   if (denied) {

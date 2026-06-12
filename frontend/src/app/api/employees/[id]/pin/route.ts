@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOrg, handleApiError } from '@/utils/supabase/helpers'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { hashPin } from '@/app/api/portal/login/route'
+import { hashPin } from '@/utils/portal-auth'
 
 /**
  * PUT /api/employees/[id]/pin

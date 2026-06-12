@@ -46,6 +46,19 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // Final breadcrumb of the shift
+    if (body.lat != null && body.lng != null) {
+      await admin.from('location_pings').insert({
+        org_id:        employee.org_id,
+        employee_id:   employee.id,
+        time_entry_id: open.id,
+        latitude:      body.lat,
+        longitude:     body.lng,
+        accuracy_m:    body.accuracy ?? null,
+      })
+    }
+
     return NextResponse.json(data)
   } catch (err) {
     return handleApiError(err)

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { createHmac, timingSafeEqual, scryptSync, randomBytes } from 'crypto'
+import {
+  verifyPin,
+  signPortalToken,
+  PORTAL_COOKIE,
+  PORTAL_SESSION_HOURS,
+} from '@/utils/portal-auth'
 
 /**
  * POST /api/portal/login
@@ -8,70 +13,15 @@ import { createHmac, timingSafeEqual, scryptSync, randomBytes } from 'crypto'
  * Employee portal authentication using badge ID + PIN.
  * Does NOT create a Supabase auth session — employees are not auth.users.
  *
- * Body: { badge: string, pin: string, org_id?: string }
+ * Body: { badge: string, pin: string }
  *
- * Returns: { employee, token } on success.
- * The token is an HMAC-signed employee ID — set it as a cookie on the
- * portal client and include it in subsequent portal API requests.
+ * Returns: { employee } on success and sets the 'portal_session' cookie.
+ * The cookie is accepted by all /api/me/* routes, so badge+PIN sessions
+ * use the same /employee app as invited accounts.
  *
  * PIN management (set/reset) is done by admins via the dashboard
  * calling PUT /api/employees/[id]/pin with { pin: string }.
  */
-
-const PORTAL_SECRET =
-  process.env.PORTAL_SESSION_SECRET ?? 'change-me-in-production'
-
-// ── PIN helpers (scrypt) ─────────────────────────────────────────────────────
-
-export function hashPin(pin: string): string {
-  const salt = randomBytes(16).toString('hex')
-  const hash = scryptSync(pin, salt, 32).toString('hex')
-  return `${salt}:${hash}`
-}
-
-function verifyPin(pin: string, stored: string): boolean {
-  const [salt, expected] = stored.split(':')
-  if (!salt || !expected) return false
-  try {
-    const computed = scryptSync(pin, salt, 32).toString('hex')
-    return timingSafeEqual(
-      Buffer.from(computed, 'hex'),
-      Buffer.from(expected, 'hex')
-    )
-  } catch {
-    return false
-  }
-}
-
-// ── Session token ─────────────────────────────────────────────────────────────
-
-export function signPortalToken(employeeId: string): string {
-  const payload = `${employeeId}.${Date.now()}`
-  const sig = createHmac('sha256', PORTAL_SECRET).update(payload).digest('hex')
-  return `${payload}.${sig}`
-}
-
-export function verifyPortalToken(token: string): string | null {
-  const parts = token.split('.')
-  if (parts.length !== 3) return null
-  const [id, ts, sig] = parts
-  const expected = createHmac('sha256', PORTAL_SECRET)
-    .update(`${id}.${ts}`)
-    .digest('hex')
-  try {
-    if (!timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
-      return null
-    }
-  } catch {
-    return null
-  }
-  // Token expires after 12 hours
-  if (Date.now() - parseInt(ts) > 12 * 3600 * 1000) return null
-  return id
-}
-
-// ── Handler ───────────────────────────────────────────────────────────────────
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -116,15 +66,15 @@ export async function POST(request: NextRequest) {
 
     const token = signPortalToken(employee.id)
 
-    const response = NextResponse.json({ employee, token })
+    const response = NextResponse.json({ employee })
 
-    // Set a secure, HTTP-only cookie for subsequent portal requests
-    response.cookies.set('portal_session', token, {
+    // Cookie path is '/' so the /employee app and /api/me/* can use it
+    response.cookies.set(PORTAL_COOKIE, token, {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   12 * 3600,  // 12 hours
-      path:     '/api/portal',
+      maxAge:   PORTAL_SESSION_HOURS * 3600,
+      path:     '/',
     })
 
     return response

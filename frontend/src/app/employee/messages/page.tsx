@@ -6,7 +6,7 @@ import { useMe } from "../me-context";
 
 type Channel = {
   id: string;
-  type: "announcements" | "job" | "dm";
+  type: "announcements" | "job" | "dm" | "coworker";
   name: string;
   description?: string;
   can_post: boolean;
@@ -26,7 +26,16 @@ const CHANNEL_ICON: Record<Channel["type"], string> = {
   announcements: "📣",
   job: "🏗️",
   dm: "🏢",
+  coworker: "👤",
 };
+
+const GROUPS: { label: string; types: Channel["type"][] }[] = [
+  { label: "Company", types: ["announcements", "dm"] },
+  { label: "Job Crews", types: ["job"] },
+  { label: "Coworkers", types: ["coworker"] },
+];
+
+const POLL_MS = 5000;
 
 const AVATAR_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4"];
 
@@ -68,9 +77,11 @@ export default function EmployeeMessagesPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
+  const [hasRealtime, setHasRealtime] = useState<boolean | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Load channel list once
+  // Load channel list once; detect whether we have a Supabase session
+  // (invite accounts get realtime; badge+PIN portal sessions poll instead)
   useEffect(() => {
     fetch("/api/me/channels")
       .then((r) => (r.ok ? r.json() : { channels: [] }))
@@ -78,6 +89,11 @@ export default function EmployeeMessagesPage() {
         setChannels(data.channels);
         if (data.channels.length > 0) setActiveId(data.channels[0].id);
       });
+
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data }) => {
+      setHasRealtime(!!data.session);
+    });
   }, []);
 
   // Load messages when the active channel changes
@@ -102,8 +118,17 @@ export default function EmployeeMessagesPage() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // Realtime: new org messages (RLS limits the subscription to our org)
+  // Live updates: realtime when signed in with Supabase, polling otherwise
   useEffect(() => {
+    if (hasRealtime === null) return;
+
+    if (!hasRealtime) {
+      const id = setInterval(() => {
+        if (activeIdRef.current) loadMessages(activeIdRef.current);
+      }, POLL_MS);
+      return () => clearInterval(id);
+    }
+
     const supabase = createClient();
     const sub = supabase
       .channel("employee-messages")
@@ -128,7 +153,7 @@ export default function EmployeeMessagesPage() {
     return () => {
       supabase.removeChannel(sub);
     };
-  }, [employee.org_id]);
+  }, [hasRealtime, employee.org_id, loadMessages]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -187,29 +212,42 @@ export default function EmployeeMessagesPage() {
         </button>
 
         {showChannels && (
-          <div className="border-t border-gray-50 p-2 space-y-0.5">
-            {channels.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setActiveId(c.id);
-                  setShowChannels(false);
-                }}
-                className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  c.id === activeId
-                    ? "bg-orange-50 text-orange-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <span>{CHANNEL_ICON[c.type]}</span>
-                <span className="flex-1 truncate">{c.name}</span>
-                {c.description && (
-                  <span className="text-xs text-gray-400 truncate max-w-[40%]">
-                    {c.description}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="border-t border-gray-50 p-2 max-h-72 overflow-y-auto">
+            {GROUPS.map((group) => {
+              const groupChannels = channels.filter((c) => group.types.includes(c.type));
+              if (groupChannels.length === 0) return null;
+              return (
+                <div key={group.label} className="mb-2 last:mb-0">
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    {group.label}
+                  </div>
+                  <div className="space-y-0.5">
+                    {groupChannels.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setActiveId(c.id);
+                          setShowChannels(false);
+                        }}
+                        className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                          c.id === activeId
+                            ? "bg-orange-50 text-orange-700 font-medium"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span>{CHANNEL_ICON[c.type]}</span>
+                        <span className="flex-1 truncate">{c.name}</span>
+                        {c.description && (
+                          <span className="text-xs text-gray-400 truncate max-w-[40%]">
+                            {c.description}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

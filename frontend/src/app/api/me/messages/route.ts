@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleApiError } from '@/utils/supabase/helpers'
-import { requireEmployee, type EmployeeContext } from '@/utils/supabase/employee-helpers'
+import {
+  requireEmployee,
+  coworkerChannel,
+  type EmployeeContext,
+} from '@/utils/supabase/employee-helpers'
 
 /**
  * Channel access rules for employees:
  *  - 'announcements'        read for everyone; post only for Manager/Admin
  *  - 'job:{job_id}'         read/write for active org jobs (crew chat)
  *  - 'dm:{own employee id}' read/write — their direct line to management
+ *  - 'edm:{idA}:{idB}'      read/write — coworker DM (must be a participant)
  */
 async function resolveChannel(
   ctx: EmployeeContext,
@@ -29,6 +34,22 @@ async function resolveChannel(
       .eq('org_id', employee.org_id)
       .single()
     return { ok: !!job, canPost: !!job }
+  }
+  if (channel.startsWith('edm:')) {
+    const ids = channel.slice(4).split(':')
+    if (ids.length !== 2 || !ids.includes(employee.id)) {
+      return { ok: false, canPost: false }
+    }
+    const otherId = ids[0] === employee.id ? ids[1] : ids[0]
+    const { data: coworker } = await admin
+      .from('employees')
+      .select('id')
+      .eq('id', otherId)
+      .eq('org_id', employee.org_id)
+      .single()
+    // Normalise: only the sorted form is valid so both sides share a thread
+    const valid = !!coworker && channel === coworkerChannel(employee.id, otherId)
+    return { ok: valid, canPost: valid }
   }
   return { ok: false, canPost: false }
 }
