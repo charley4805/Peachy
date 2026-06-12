@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleApiError } from '@/utils/supabase/helpers'
-import { requireEmployee, entryHours, mondayOf } from '@/utils/supabase/employee-helpers'
+import { requireEmployee, entryHours } from '@/utils/supabase/employee-helpers'
 
-type WeekEntry = {
+type DayEntry = {
   id: string
   clock_in: string
   clock_out: string | null
@@ -12,82 +12,60 @@ type WeekEntry = {
   flagged: boolean
 }
 
-type Week = {
-  period_start: string
-  period_end: string
-  total_hours: number
-  status: string // open | pending | approved | locked
-  entries: WeekEntry[]
+type DayRow = {
+  date: string
+  hours: number
+  entries: DayEntry[]
 }
 
 /**
- * GET /api/me/timesheets?weeks=8
+ * GET /api/me/timesheets?start=YYYY-MM-DD&end=YYYY-MM-DD
  *
- * Hours worked grouped into Monday-start weeks, computed from the
- * employee's time entries, merged with any official timesheet record
- * (status: pending/approved/locked) the org has created for that week.
+ * Days worked within the period (one row per day that has time entries),
+ * with per-day and period totals. The client picks the period: weekly,
+ * bi-weekly, or monthly.
  */
 export async function GET(request: NextRequest) {
   try {
     const { admin, employee } = await requireEmployee()
     const { searchParams } = new URL(request.url)
-    const weeksBack = Math.min(26, Math.max(1, Number(searchParams.get('weeks')) || 8))
+    const start = searchParams.get('start')
+    const end = searchParams.get('end')
 
-    const currentMonday = mondayOf(new Date())
-    const rangeStart = new Date(
-      new Date(`${currentMonday}T00:00:00Z`).getTime() - (weeksBack - 1) * 7 * 86400000
-    )
-      .toISOString()
-      .slice(0, 10)
-
-    const [entriesRes, sheetsRes] = await Promise.all([
-      admin
-        .from('time_entries')
-        .select('id, clock_in, clock_out, break_minutes, flagged, job:jobs(name)')
-        .eq('employee_id', employee.id)
-        .gte('clock_in', `${rangeStart}T00:00:00Z`)
-        .order('clock_in'),
-      admin
-        .from('timesheets')
-        .select('period_start, status')
-        .eq('employee_id', employee.id)
-        .gte('period_start', rangeStart),
-    ])
-
-    if (entriesRes.error) throw entriesRes.error
-
-    const sheetStatus = new Map<string, string>()
-    for (const s of sheetsRes.data ?? []) {
-      sheetStatus.set(s.period_start, s.status)
-    }
-
-    const weeks = new Map<string, Week>()
-    // Seed every week in range so empty weeks still show up
-    for (let i = 0; i < weeksBack; i++) {
-      const start = new Date(
-        new Date(`${rangeStart}T00:00:00Z`).getTime() + i * 7 * 86400000
+    if (
+      !start || !end ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(end) ||
+      end < start
+    ) {
+      return NextResponse.json(
+        { error: 'start and end are required (YYYY-MM-DD)' },
+        { status: 400 }
       )
-      const periodStart = start.toISOString().slice(0, 10)
-      const periodEnd = new Date(start.getTime() + 6 * 86400000)
-        .toISOString()
-        .slice(0, 10)
-      weeks.set(periodStart, {
-        period_start: periodStart,
-        period_end: periodEnd,
-        total_hours: 0,
-        status: sheetStatus.get(periodStart) ?? 'open',
-        entries: [],
-      })
     }
 
-    for (const e of entriesRes.data ?? []) {
-      const periodStart = mondayOf(new Date(e.clock_in))
-      const week = weeks.get(periodStart)
-      if (!week) continue
+    const { data: entries, error } = await admin
+      .from('time_entries')
+      .select('id, clock_in, clock_out, break_minutes, flagged, job:jobs(name)')
+      .eq('employee_id', employee.id)
+      .gte('clock_in', `${start}T00:00:00Z`)
+      .lt('clock_in', new Date(new Date(`${end}T00:00:00Z`).getTime() + 86400000)
+        .toISOString())
+      .order('clock_in')
+
+    if (error) throw error
+
+    const days = new Map<string, DayRow>()
+    let totalHours = 0
+
+    for (const e of entries ?? []) {
+      const date = e.clock_in.slice(0, 10)
       const hours = entryHours(e.clock_in, e.clock_out, e.break_minutes ?? 0)
       const rawJob = e.job
       const job = (Array.isArray(rawJob) ? rawJob[0] : rawJob) as { name: string } | null
-      week.entries.push({
+
+      const row: DayRow = days.get(date) ?? { date, hours: 0, entries: [] }
+      row.entries.push({
         id: e.id,
         clock_in: e.clock_in,
         clock_out: e.clock_out,
@@ -96,14 +74,20 @@ export async function GET(request: NextRequest) {
         job_name: job?.name ?? null,
         flagged: e.flagged,
       })
-      week.total_hours += hours
+      row.hours += hours
+      days.set(date, row)
+      totalHours += hours
     }
 
-    const result = [...weeks.values()]
-      .map((w) => ({ ...w, total_hours: Math.round(w.total_hours * 100) / 100 }))
-      .sort((a, b) => (a.period_start < b.period_start ? 1 : -1))
-
-    return NextResponse.json(result)
+    return NextResponse.json({
+      period_start: start,
+      period_end: end,
+      days: [...days.values()].map((d) => ({
+        ...d,
+        hours: Math.round(d.hours * 100) / 100,
+      })),
+      total_hours: Math.round(totalHours * 100) / 100,
+    })
   } catch (err) {
     return handleApiError(err)
   }

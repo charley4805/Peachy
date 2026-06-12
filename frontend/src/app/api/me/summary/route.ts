@@ -20,7 +20,7 @@ export async function GET() {
     const [activeRes, entriesRes, shiftsRes, jobsRes, ptoRes] = await Promise.all([
       admin
         .from('time_entries')
-        .select('id, clock_in, job_id, job:jobs(name, color)')
+        .select('id, clock_in, job_id, job:jobs(name, color, location:locations(name, address))')
         .eq('employee_id', employee.id)
         .is('clock_out', null)
         .order('clock_in', { ascending: false })
@@ -41,7 +41,9 @@ export async function GET() {
         .order('start_time'),
       admin
         .from('jobs')
-        .select('id, name, customer, color')
+        .select(
+          'id, name, customer, color, location:locations(name, address, latitude, longitude, radius_meters, validation_mode)'
+        )
         .eq('org_id', employee.org_id)
         .eq('status', 'active')
         .order('name'),

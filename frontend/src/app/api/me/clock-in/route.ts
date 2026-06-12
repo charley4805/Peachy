@@ -7,8 +7,12 @@ import { requireEmployee } from '@/utils/supabase/employee-helpers'
  *
  * Body: { job_id?: string, lat?: number, lng?: number, notes?: string }
  *
- * Same rules as the admin clock-in route, but the employee identity comes
- * from the signed-in session — an employee can only ever clock themselves in.
+ * The employee identity comes from the session — an employee can only
+ * ever clock themselves in.
+ *
+ * Geofencing is ENFORCED for employee self-service: if the selected job
+ * has a geofenced location (and validation_mode isn't 'off'), the device
+ * must report a position inside the radius or the clock-in is rejected.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,38 +34,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let geofenceWarning: string | null = null
-    let flagged = false
-    let flagReason: string | null = null
-
-    if (body.job_id && body.lat != null && body.lng != null) {
+    if (body.job_id) {
       const { data: job } = await admin
         .from('jobs')
-        .select('location:locations(latitude, longitude, radius_meters, validation_mode)')
+        .select('location:locations(name, latitude, longitude, radius_meters, validation_mode)')
         .eq('id', body.job_id)
         .eq('org_id', employee.org_id)
         .single()
 
       const rawLoc = job?.location
       const loc = (Array.isArray(rawLoc) ? rawLoc[0] : rawLoc) as
-        | { latitude: number; longitude: number; radius_meters: number; validation_mode: string }
+        | { name: string; latitude: number; longitude: number; radius_meters: number; validation_mode: string }
         | null
         | undefined
-      if (loc?.latitude && loc?.longitude) {
+
+      if (loc?.latitude && loc?.longitude && loc.validation_mode !== 'off') {
+        if (body.lat == null || body.lng == null) {
+          return NextResponse.json(
+            {
+              error:
+                'Location is required to clock in at this job site. Enable location services and try again.',
+            },
+            { status: 422 }
+          )
+        }
         const dist = haversineMetres(body.lat, body.lng, loc.latitude, loc.longitude)
         if (dist > loc.radius_meters) {
-          const msg = `${Math.round(dist)}m from job site (allowed: ${loc.radius_meters}m)`
-          if (loc.validation_mode === 'require') {
-            return NextResponse.json(
-              { error: `Outside geofence: ${msg}` },
-              { status: 422 }
-            )
-          }
-          if (loc.validation_mode === 'warn') {
-            geofenceWarning = msg
-            flagged = true
-            flagReason = `Geofence: ${msg}`
-          }
+          return NextResponse.json(
+            {
+              error: `You must be on site to clock in — you are ${Math.round(dist)}m from ${loc.name} (allowed: ${loc.radius_meters}m).`,
+            },
+            { status: 422 }
+          )
         }
       }
     }
@@ -76,18 +80,25 @@ export async function POST(request: NextRequest) {
         clock_in_lat: body.lat ?? null,
         clock_in_lng: body.lng ?? null,
         notes:        body.notes ?? null,
-        flagged,
-        flag_reason:  flagReason,
       })
       .select()
       .single()
 
     if (error) throw error
 
-    return NextResponse.json(
-      { ...data, geofence_warning: geofenceWarning },
-      { status: 201 }
-    )
+    // First breadcrumb of the shift
+    if (body.lat != null && body.lng != null) {
+      await admin.from('location_pings').insert({
+        org_id:        employee.org_id,
+        employee_id:   employee.id,
+        time_entry_id: data.id,
+        latitude:      body.lat,
+        longitude:     body.lng,
+        accuracy_m:    body.accuracy ?? null,
+      })
+    }
+
+    return NextResponse.json(data, { status: 201 })
   } catch (err) {
     return handleApiError(err)
   }

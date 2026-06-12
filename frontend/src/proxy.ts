@@ -33,12 +33,20 @@ export async function proxy(request: NextRequest) {
     pathname === '/' ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/employee-portal') ||
+    pathname.startsWith('/api/portal') ||
+    pathname.startsWith('/api/invite') ||
     pathname.startsWith('/invite') ||
     pathname.startsWith('/legal') ||
     pathname.startsWith('/partner')
 
+  // Badge+PIN portal sessions (HMAC cookie, no Supabase user) may use the
+  // employee app — the cookie is verified server-side in requireEmployee().
+  const hasPortalSession = !!request.cookies.get('portal_session')?.value
+  const isEmployeeArea =
+    pathname.startsWith('/employee') || pathname.startsWith('/api/me')
+
   // Unauthenticated user trying to reach a protected route
-  if (!user && !isPublic) {
+  if (!user && !isPublic && !(hasPortalSession && isEmployeeArea)) {
     return NextResponse.redirect(new URL('/auth', request.url))
   }
 

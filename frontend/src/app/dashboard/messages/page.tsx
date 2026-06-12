@@ -1,234 +1,280 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 type ChannelType = "announcements" | "job" | "dm";
 
 type Channel = {
-  id: string;
+  id: string; // matches messages.channel
   type: ChannelType;
   name: string;
   icon: string;
   description?: string;
-  memberCount?: number;
-  unread?: number;
 };
 
 type Message = {
   id: string;
-  channelId: string;
-  senderName: string;
-  senderInitials: string;
-  senderColor: string;
+  channel: string;
+  sender_type: "admin" | "employee";
+  sender_id: string | null;
+  sender_name: string;
   body: string;
-  timestamp: Date;
-  isSystem?: boolean;
+  created_at: string;
 };
 
-const CHANNELS: Channel[] = [
-  {
-    id: "announcements",
-    type: "announcements",
-    name: "Announcements",
-    icon: "📣",
-    description: "Company-wide updates from management",
-    memberCount: 7,
-  },
-  {
-    id: "job-riverside",
-    type: "job",
-    name: "Riverside Complex",
-    icon: "🏗️",
-    description: "Sunrise Development · Phase 2",
-    memberCount: 3,
-  },
-  {
-    id: "job-harbor",
-    type: "job",
-    name: "Harbor View",
-    icon: "🏗️",
-    description: "Harbor Bay LLC · Foundation",
-    memberCount: 2,
-  },
-  {
-    id: "job-metro",
-    type: "job",
-    name: "Metro Clinic Reno",
-    icon: "🏗️",
-    description: "Metro Health Partners · Interior Buildout",
-    memberCount: 1,
-    unread: 2,
-  },
-  { id: "dm-marcus", type: "dm", name: "Marcus Rivera", icon: "👤", unread: 1 },
-  { id: "dm-anita", type: "dm", name: "Anita Patel", icon: "👤" },
-  { id: "dm-deja", type: "dm", name: "Deja Williams", icon: "👤" },
-];
+const AVATAR_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4"];
 
-const INITIAL_MESSAGES: Record<string, Message[]> = {
-  announcements: [
-    {
-      id: "a3",
-      channelId: "announcements",
-      senderName: "System",
-      senderInitials: "SY",
-      senderColor: "#9ca3af",
-      body: "Marcus Rivera clocked in at Riverside Complex — 7:02 AM",
-      timestamp: new Date(2026, 4, 26, 7, 3),
-      isSystem: true,
-    },
-    {
-      id: "a1",
-      channelId: "announcements",
-      senderName: "Anita Patel",
-      senderInitials: "AP",
-      senderColor: "#8b5cf6",
-      body: "🗓 The schedule for the week of June 1 has been published. Please review your shifts and let me know if you have any conflicts.",
-      timestamp: new Date(2026, 4, 26, 8, 14),
-    },
-    {
-      id: "a2",
-      channelId: "announcements",
-      senderName: "Anita Patel",
-      senderInitials: "AP",
-      senderColor: "#8b5cf6",
-      body: "Reminder: all timesheets for May 18–24 need to be submitted by end of day Friday. Reach out if you need any corrections.",
-      timestamp: new Date(2026, 4, 26, 8, 16),
-      isSystem: false,
-    },
-  ],
-  "job-riverside": [
-    {
-      id: "r1",
-      channelId: "job-riverside",
-      senderName: "Marcus Rivera",
-      senderInitials: "MR",
-      senderColor: "#3b82f6",
-      body: "Good morning crew. Starting framing on the east wing today. Hard hats required on the scaffold.",
-      timestamp: new Date(2026, 4, 26, 7, 5),
-    },
-    {
-      id: "r2",
-      channelId: "job-riverside",
-      senderName: "Tom Kowalski",
-      senderInitials: "TK",
-      senderColor: "#10b981",
-      body: "Morning. Running about 10 minutes late — parking situation on Riverside Dr.",
-      timestamp: new Date(2026, 4, 26, 7, 22),
-    },
-    {
-      id: "r3",
-      channelId: "job-riverside",
-      senderName: "Anita Patel",
-      senderInitials: "AP",
-      senderColor: "#8b5cf6",
-      body: "No problem Tom. Heads up — the city inspector is coming at 2 PM for rough framing sign-off.",
-      timestamp: new Date(2026, 4, 26, 8, 1),
-    },
-  ],
-  "job-harbor": [],
-  "job-metro": [
-    {
-      id: "m1",
-      channelId: "job-metro",
-      senderName: "Anita Patel",
-      senderInitials: "AP",
-      senderColor: "#8b5cf6",
-      body: "Drywall delivery is confirmed for Thursday morning. Please clear the east corridor by 7 AM.",
-      timestamp: new Date(2026, 4, 25, 16, 30),
-    },
-    {
-      id: "m2",
-      channelId: "job-metro",
-      senderName: "Jordan Lee",
-      senderInitials: "JL",
-      senderColor: "#f59e0b",
-      body: "Will do. Any update on the paint colors for exam rooms 4–6?",
-      timestamp: new Date(2026, 4, 25, 16, 45),
-    },
-  ],
-  "dm-marcus": [
-    {
-      id: "d1",
-      channelId: "dm-marcus",
-      senderName: "Marcus Rivera",
-      senderInitials: "MR",
-      senderColor: "#3b82f6",
-      body: "Hey, can I swap my shift on Thursday with Carlos? He's good with it.",
-      timestamp: new Date(2026, 4, 25, 14, 20),
-    },
-  ],
-  "dm-anita": [],
-  "dm-deja": [],
-};
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function senderColor(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-function getDateLabel(date: Date): string {
-  const today = new Date(2026, 4, 26);
-  const yesterday = new Date(2026, 4, 25);
-  if (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  ) {
-    return "Today";
-  }
-  if (
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate()
-  ) {
-    return "Yesterday";
-  }
+function senderInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0].toUpperCase())
+    .slice(0, 2)
+    .join("");
+}
+
+function formatTime(ts: string): string {
+  return new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function getDateLabel(ts: string): string {
+  const date = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86400000);
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(date, today)) return "Today";
+  if (same(date, yesterday)) return "Yesterday";
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+function ChannelSection({
+  title,
+  items,
+  activeChannel,
+  onSelect,
+}: {
+  title: string;
+  items: Channel[];
+  activeChannel: string;
+  onSelect: (id: string) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        {title}
+      </div>
+      <div className="mt-1 space-y-0.5">
+        {items.map((channel) => {
+          const isActive = channel.id === activeChannel;
+          return (
+            <button
+              key={channel.id}
+              onClick={() => onSelect(channel.id)}
+              className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                isActive ? "bg-gray-700" : "hover:bg-gray-800"
+              }`}
+            >
+              <span className="text-base flex-shrink-0">{channel.icon}</span>
+              <span
+                className={`flex-1 text-sm font-medium truncate ${
+                  isActive ? "text-white" : "text-gray-400"
+                }`}
+              >
+                {channel.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function MessagesPage() {
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [senderName, setSenderName] = useState("Management");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState("announcements");
-  const [channels, setChannels] = useState<Channel[]>(CHANNELS);
-  const [messages, setMessages] = useState<Record<string, Message[]>>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
   const [draft, setDraft] = useState("");
-  const composeRef = useRef<HTMLTextAreaElement>(null);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const currentChannel = channels.find((c) => c.id === activeChannel);
-  const currentMessages = messages[activeChannel] ?? [];
+  const activeChannelRef = useRef(activeChannel);
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
 
-  function activateChannel(id: string) {
-    setActiveChannel(id);
-    setChannels((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c))
-    );
-  }
+  // Bootstrap: who am I, which org, and what channels exist
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
 
-  function sendMessage() {
-    if (!draft.trim()) return;
-    const newMsg: Message = {
-      id: `msg-${Date.now()}`,
-      channelId: activeChannel,
-      senderName: "You",
-      senderInitials: "ME",
-      senderColor: "#f97316",
-      body: draft.trim(),
-      timestamp: new Date(),
+    async function bootstrap() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      setUserId(user.id);
+
+      const [{ data: member }, { data: profile }] = await Promise.all([
+        supabase.from("org_members").select("org_id").eq("user_id", user.id).limit(1).single(),
+        supabase.from("profiles").select("first_name, last_name").eq("id", user.id).single(),
+      ]);
+      if (cancelled || !member?.org_id) {
+        setLoadingChannels(false);
+        return;
+      }
+      setOrgId(member.org_id);
+
+      const name =
+        [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
+        user.email?.split("@")[0] ||
+        "Management";
+      setSenderName(name);
+
+      const [{ data: jobs }, { data: employees }] = await Promise.all([
+        supabase
+          .from("jobs")
+          .select("id, name, customer")
+          .eq("org_id", member.org_id)
+          .eq("status", "active")
+          .order("name"),
+        supabase
+          .from("employees")
+          .select("id, name, role")
+          .eq("org_id", member.org_id)
+          .eq("status", "Active")
+          .order("name"),
+      ]);
+      if (cancelled) return;
+
+      setChannels([
+        {
+          id: "announcements",
+          type: "announcements",
+          name: "Announcements",
+          icon: "📣",
+          description: "Company-wide updates from management",
+        },
+        ...(jobs ?? []).map((j) => ({
+          id: `job:${j.id}`,
+          type: "job" as const,
+          name: j.name,
+          icon: "🏗️",
+          description: j.customer,
+        })),
+        ...(employees ?? []).map((e) => ({
+          id: `dm:${e.id}`,
+          type: "dm" as const,
+          name: e.name,
+          icon: "👤",
+          description: e.role,
+        })),
+      ]);
+      setLoadingChannels(false);
+    }
+
+    bootstrap();
+    return () => {
+      cancelled = true;
     };
-    setMessages((prev) => ({
-      ...prev,
-      [activeChannel]: [...(prev[activeChannel] ?? []), newMsg],
-    }));
-    setDraft("");
-  }
+  }, []);
+
+  // Load messages for the active channel
+  const loadMessages = useCallback((org: string, channel: string) => {
+    const supabase = createClient();
+    return supabase
+      .from("messages")
+      .select("id, channel, sender_type, sender_id, sender_name, body, created_at")
+      .eq("org_id", org)
+      .eq("channel", channel)
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (data) setMessages(data);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (orgId) loadMessages(orgId, activeChannel);
+  }, [orgId, activeChannel, loadMessages]);
+
+  // Realtime: append new messages in the open channel
+  useEffect(() => {
+    if (!orgId) return;
+    const supabase = createClient();
+    const sub = supabase
+      .channel("dashboard-messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `org_id=eq.${orgId}`,
+        },
+        (payload) => {
+          const msg = payload.new as Message;
+          setMessages((prev) => {
+            if (msg.channel !== activeChannelRef.current) return prev;
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [orgId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentMessages.length, activeChannel]);
+  }, [messages.length, activeChannel]);
+
+  async function sendMessage() {
+    const body = draft.trim();
+    if (!body || !orgId || sending) return;
+    setSending(true);
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("messages")
+      .insert({
+        org_id: orgId,
+        channel: activeChannel,
+        sender_type: "admin",
+        sender_id: userId,
+        sender_name: senderName,
+        body,
+      })
+      .select()
+      .single();
+    if (data) {
+      setMessages((prev) =>
+        prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]
+      );
+      setDraft("");
+    }
+    setSending(false);
+  }
+
+  const currentChannel = channels.find((c) => c.id === activeChannel);
 
   // Group messages by date
   const groupedMessages: { dateLabel: string; msgs: Message[] }[] = [];
-  for (const msg of currentMessages) {
-    const label = getDateLabel(msg.timestamp);
+  for (const msg of messages) {
+    const label = getDateLabel(msg.created_at);
     const last = groupedMessages[groupedMessages.length - 1];
     if (!last || last.dateLabel !== label) {
       groupedMessages.push({ dateLabel: label, msgs: [msg] });
@@ -241,32 +287,6 @@ export default function MessagesPage() {
   const jobChannels = channels.filter((c) => c.type === "job");
   const dmChannels = channels.filter((c) => c.type === "dm");
 
-  function ChannelItem({ channel }: { channel: Channel }) {
-    const isActive = channel.id === activeChannel;
-    return (
-      <button
-        onClick={() => activateChannel(channel.id)}
-        className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-          isActive ? "bg-gray-700" : "hover:bg-gray-800"
-        }`}
-      >
-        <span className="text-base flex-shrink-0">{channel.icon}</span>
-        <span
-          className={`flex-1 text-sm font-medium truncate ${
-            isActive ? "text-white" : "text-gray-400"
-          }`}
-        >
-          {channel.name}
-        </span>
-        {channel.unread && channel.unread > 0 ? (
-          <span className="flex-shrink-0 h-5 min-w-[20px] rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold px-1">
-            {channel.unread}
-          </span>
-        ) : null}
-      </button>
-    );
-  }
-
   return (
     <div className="h-full flex overflow-hidden">
       {/* Left sidebar */}
@@ -276,47 +296,35 @@ export default function MessagesPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-4">
-          {/* General */}
-          <div>
-            <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              General
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {generalChannels.map((c) => (
-                <ChannelItem key={c.id} channel={c} />
-              ))}
-            </div>
-          </div>
-
-          {/* Job Channels */}
-          <div>
-            <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Job Channels
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {jobChannels.map((c) => (
-                <ChannelItem key={c.id} channel={c} />
-              ))}
-            </div>
-          </div>
-
-          {/* Direct Messages */}
-          <div>
-            <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Direct Messages
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {dmChannels.map((c) => (
-                <ChannelItem key={c.id} channel={c} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-3 py-3 border-t border-gray-800 flex-shrink-0">
-          <button className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-800 hover:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors">
-            <span>📨</span> New Message
-          </button>
+          {loadingChannels ? (
+            <p className="px-3 text-xs text-gray-500">Loading channels…</p>
+          ) : (
+            <>
+              <ChannelSection
+                title="General"
+                items={generalChannels}
+                activeChannel={activeChannel}
+                onSelect={setActiveChannel}
+              />
+              <ChannelSection
+                title="Job Channels"
+                items={jobChannels}
+                activeChannel={activeChannel}
+                onSelect={setActiveChannel}
+              />
+              <ChannelSection
+                title="Direct Messages"
+                items={dmChannels}
+                activeChannel={activeChannel}
+                onSelect={setActiveChannel}
+              />
+              {jobChannels.length === 0 && dmChannels.length === 0 && (
+                <p className="px-3 text-xs text-gray-500">
+                  Add jobs and employees to get crew channels and direct messages.
+                </p>
+              )}
+            </>
+          )}
         </div>
       </aside>
 
@@ -325,34 +333,28 @@ export default function MessagesPage() {
         {/* Header bar */}
         <div className="border-b border-gray-100 px-6 py-4 flex-shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-xl flex-shrink-0">{currentChannel?.icon}</span>
+            <span className="text-xl flex-shrink-0">{currentChannel?.icon ?? "💬"}</span>
             <div className="min-w-0">
-              <h3 className="font-bold text-gray-900 leading-tight">{currentChannel?.name}</h3>
+              <h3 className="font-bold text-gray-900 leading-tight">
+                {currentChannel?.name ?? "Messages"}
+              </h3>
               {currentChannel?.description && (
                 <p className="text-xs text-gray-400 truncate">{currentChannel.description}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            {currentChannel?.memberCount && (
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                👥 {currentChannel.memberCount}{" "}
-                {currentChannel.memberCount === 1 ? "member" : "members"}
-              </span>
-            )}
-            <button className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Search">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-              </svg>
-            </button>
-          </div>
+          {currentChannel?.type === "dm" && (
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 flex-shrink-0">
+              Private thread with {currentChannel.name}
+            </span>
+          )}
         </div>
 
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {currentMessages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <span className="text-4xl mb-3">{currentChannel?.icon}</span>
+              <span className="text-4xl mb-3">{currentChannel?.icon ?? "💬"}</span>
               <p className="text-gray-500 font-medium">No messages yet</p>
               <p className="text-gray-400 text-sm mt-1">Start the conversation below.</p>
             </div>
@@ -367,33 +369,37 @@ export default function MessagesPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {msgs.map((msg) =>
-                    msg.isSystem ? (
-                      <div key={msg.id} className="flex justify-center">
-                        <span className="text-xs text-gray-400 italic bg-gray-50 rounded-full px-3 py-1">
-                          {msg.body}
-                        </span>
-                      </div>
-                    ) : (
+                  {msgs.map((msg) => {
+                    const mine = msg.sender_type === "admin" && msg.sender_id === userId;
+                    return (
                       <div key={msg.id} className="flex gap-3">
                         <div
                           className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
-                          style={{ backgroundColor: msg.senderColor }}
+                          style={{
+                            backgroundColor: mine ? "#f97316" : senderColor(msg.sender_name),
+                          }}
                         >
-                          {msg.senderInitials}
+                          {senderInitials(msg.sender_name)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 mb-0.5">
                             <span className="text-sm font-medium text-gray-900">
-                              {msg.senderName}
+                              {mine ? "You" : msg.sender_name}
                             </span>
-                            <span className="text-xs text-gray-400">{formatTime(msg.timestamp)}</span>
+                            {msg.sender_type === "employee" && (
+                              <span className="rounded bg-blue-50 px-1.5 text-[10px] font-medium text-blue-600">
+                                Employee
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-400">
+                              {formatTime(msg.created_at)}
+                            </span>
                           </div>
                           <p className="text-sm text-gray-700 leading-relaxed">{msg.body}</p>
                         </div>
                       </div>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             ))
@@ -405,7 +411,6 @@ export default function MessagesPage() {
         <div className="border-t border-gray-100 px-6 py-4 flex-shrink-0">
           <div className="rounded-xl border border-gray-200 focus-within:border-orange-400 transition-colors overflow-hidden">
             <textarea
-              ref={composeRef}
               rows={2}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -418,29 +423,13 @@ export default function MessagesPage() {
               placeholder={`Message ${currentChannel?.name ?? "…"}`}
               className="w-full resize-none px-4 pt-3 pb-1 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none"
             />
-            <div className="flex items-center justify-between px-3 pb-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-gray-600 text-lg transition-colors"
-                  aria-label="Attach file"
-                >
-                  📎
-                </button>
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-gray-600 text-lg transition-colors"
-                  aria-label="Emoji"
-                >
-                  😊
-                </button>
-              </div>
+            <div className="flex items-center justify-end px-3 pb-2">
               <button
                 onClick={sendMessage}
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || sending}
                 className="rounded-lg bg-orange-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Send
+                {sending ? "Sending…" : "Send"}
               </button>
             </div>
           </div>

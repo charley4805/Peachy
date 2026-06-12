@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers'
 import { createClient } from './server'
 import { createAdminClient } from './admin'
+import { verifyPortalToken, PORTAL_COOKIE } from '@/utils/portal-auth'
 
 export type EmployeeRecord = {
   id: string
@@ -23,47 +25,85 @@ export type EmployeeRecord = {
 export type EmployeeContext = {
   /** Service-role client — employee writes are server-controlled, never direct. */
   admin: ReturnType<typeof createAdminClient>
-  userId: string
+  /** auth.users id for invited accounts; null for badge+PIN portal sessions. */
+  userId: string | null
+  /** 'account' = Supabase auth (invite flow), 'portal' = badge+PIN cookie. */
+  authMethod: 'account' | 'portal'
   employee: EmployeeRecord
 }
 
+const EMPLOYEE_FIELDS =
+  'id, org_id, name, badge, role, department, pay_type, pay_rate, pay_unit, status, hire_date, email, phone, avatar_url, pto_allowance_hours, user_id'
+
 /**
- * Verifies the request is from a signed-in user linked to an Active
- * employee record (via the invite flow setting employees.user_id).
+ * Verifies the request comes from an Active employee, via either:
+ *  1. a Supabase auth session linked through the invite flow
+ *     (employees.user_id), or
+ *  2. a badge+PIN portal session (HMAC 'portal_session' cookie).
  * Throws a typed error on failure — catch with `handleApiError()`.
  */
 export async function requireEmployee(): Promise<EmployeeContext> {
+  const admin = createAdminClient()
   const supabase = await createClient()
 
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser()
 
-  if (authError || !user) {
+  if (user) {
+    const { data: employee } = await admin
+      .from('employees')
+      .select(EMPLOYEE_FIELDS)
+      .eq('user_id', user.id)
+      .eq('status', 'Active')
+      .limit(1)
+      .single()
+
+    if (!employee) {
+      throw Object.assign(
+        new Error('No employee record linked to this account'),
+        { status: 403 }
+      )
+    }
+    return {
+      admin,
+      userId: user.id,
+      authMethod: 'account',
+      employee: employee as EmployeeRecord,
+    }
+  }
+
+  // Fall back to a badge+PIN portal session
+  const cookieStore = await cookies()
+  const portalToken = cookieStore.get(PORTAL_COOKIE)?.value
+  const employeeId = portalToken ? verifyPortalToken(portalToken) : null
+
+  if (!employeeId) {
     throw Object.assign(new Error('Unauthorized'), { status: 401 })
   }
 
-  const admin = createAdminClient()
-
   const { data: employee } = await admin
     .from('employees')
-    .select(
-      'id, org_id, name, badge, role, department, pay_type, pay_rate, pay_unit, status, hire_date, email, phone, avatar_url, pto_allowance_hours, user_id'
-    )
-    .eq('user_id', user.id)
+    .select(EMPLOYEE_FIELDS)
+    .eq('id', employeeId)
     .eq('status', 'Active')
-    .limit(1)
     .single()
 
   if (!employee) {
-    throw Object.assign(
-      new Error('No employee record linked to this account'),
-      { status: 403 }
-    )
+    throw Object.assign(new Error('Unauthorized'), { status: 401 })
   }
 
-  return { admin, userId: user.id, employee: employee as EmployeeRecord }
+  return {
+    admin,
+    userId: null,
+    authMethod: 'portal',
+    employee: employee as EmployeeRecord,
+  }
+}
+
+/** Coworker DM channel id — sorted so both participants compute the same id. */
+export function coworkerChannel(a: string, b: string): string {
+  return `edm:${[a, b].sort().join(':')}`
 }
 
 /** Hours worked on a closed time entry, net of break time. */
